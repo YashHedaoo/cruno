@@ -354,6 +354,8 @@ struct BotPlacement: View {
         case .error:     return Color(hex: "#F4505E")
         case .finished:  return Color(hex: "#34D399")
         case .ratelimit: return Color(hex: "#F59E0B")
+        case .listening: return Color(hex: "#22D3A0")
+        case .speaking:  return Color(hex: "#4ADEBD")
         default:         return Color.white
         }
     }
@@ -460,7 +462,7 @@ struct IslandContentView: View {
                     // chat (prompt) is always flexible; mail is flexible only when active so
                     // it doesn't push the ZStack taller when inactive. Overview is flexible
                     // when active to fit the always-on widget pills.
-                    let isTall = v == .prompt || (v == .mail && active) || (v == .overview && active)
+                    let isTall = v == .prompt || (v == .mail && active) || (v == .overview && active) || (v == .voice && active)
                     let anim: Animation = active
                         ? .spring(response: 0.4, dampingFraction: 0.8).delay(0.16)
                         : .easeIn(duration: 0.16)
@@ -510,6 +512,9 @@ struct IslandHeader: View {
                         state.promptContext = WindowContextCapture.captureActive(from: state.lastExternalApp)
                     }
                     #endif
+                })
+                TabButton(icon: "waveform", view: .voice, state: state, preAction: {
+                    VoiceCoordinator.shared.activate()
                 })
                 TabButton(icon: "plus", view: .upload, state: state)
             }

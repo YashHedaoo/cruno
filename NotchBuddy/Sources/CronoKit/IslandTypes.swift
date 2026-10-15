@@ -12,6 +12,7 @@ enum IslandView: String, CaseIterable {
     case overview, empty, approval, question, error, finished
     case confused, upload, uploading, choose, mail, prompt
     case searching, result, note, settings, greeting, wardrobe, recap
+    case voice
 }
 
 // MARK: - Bot State
@@ -20,6 +21,7 @@ enum BotState: String, CaseIterable {
     case idle, working, thinking, searching
     case approval, question, error, finished
     case ratelimit, sleeping, dizzy
+    case listening, speaking
 }
 
 // MARK: - Bot Emote
@@ -194,6 +196,7 @@ enum IslandConst {
         .greeting:  ViewLayout(height: 150, botX: 320, botY: 90,  botDiameter: 0,  agentMode: .none),
         .wardrobe:  ViewLayout(height: 160, botX: 68,  botY: nil, botDiameter: 58, agentMode: .none),
         .recap:     ViewLayout(height: 160, botX: 62,  botY: nil, botDiameter: 58, agentMode: .column),
+        .voice:     ViewLayout(height: 160, botX: 52,  botY: nil, botDiameter: 44, agentMode: .column),
     ]
 
     // Project colors — keyed by lowercase display name or slug
@@ -230,5 +233,6 @@ enum IslandConst {
         .searching: "rgba(99,102,241,0.5)",
         .result:    "rgba(52,211,153,0.22)",
         .prompt:    "rgba(99,102,241,0.22)",
+        .voice:     "rgba(34,211,160,0.30)",
     ]
 }

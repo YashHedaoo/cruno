@@ -341,6 +341,15 @@ final class AppState: ObservableObject {
     // n8n — the last executions, newest first (for the iPhone; the notch shows only the latest)
     @Published var n8nRuns: [N8nRun] = []
 
+    // Voice assistant
+    @Published var voicePhase: VoicePhase = .idle
+    @Published var voiceResponse: String = ""
+    @Published var voiceTranscript: String = ""
+    @Published var voiceAudioLevel: Float = 0
+    @Published var voiceEnabled: Bool = UserDefaults.standard.object(forKey: "voiceEnabled") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(voiceEnabled, forKey: "voiceEnabled") }
+    }
+
     // Chat conversation history
     @Published var chatHistory: [ChatMessage] = []
 

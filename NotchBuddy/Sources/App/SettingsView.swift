@@ -1,6 +1,8 @@
 import SwiftUI
 import ServiceManagement
 import AppKit
+import Speech
+import AVFoundation
 
 struct SettingsView: View {
     @ObservedObject private var state = AppState.shared
@@ -287,6 +289,20 @@ struct SettingsView: View {
                         .frame(width: 36, alignment: .trailing)
                         .monospacedDigit()
                 }
+            }
+            .padding(6)
+        }
+
+        GroupBox("Voice assistant") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Say \"Cruno\" to activate", isOn: Binding(
+                    get: { state.voiceEnabled },
+                    set: { VoiceCoordinator.shared.setEnabled($0) }
+                ))
+                Text("On-device only — no audio leaves your Mac.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                VoicePermissionStatusView()
             }
             .padding(6)
         }
@@ -1959,5 +1975,49 @@ struct ShortcutRecorderButton: View {
             34:"I", 37:"L", 38:"J", 40:"K", 45:"N", 46:"M", 49:"Space", 50:"`", 27:"-"
         ]
         return map[c] ?? "·"
+    }
+}
+
+// MARK: - Voice permission status row
+
+private struct VoicePermissionStatusView: View {
+    @State private var micOK    = false
+    @State private var speechOK = false
+
+    var allGranted: Bool { micOK && speechOK }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(allGranted ? Color(hex: "#22D3A0") : Color(hex: "#F4505E"))
+                .frame(width: 6, height: 6)
+            if allGranted {
+                Text("Microphone & speech access granted")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: "#22D3A0"))
+            } else {
+                Text(permissionLabel)
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: "#F4505E"))
+                Button("Open Privacy Settings") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+                }
+                .font(.system(size: 11))
+                .buttonStyle(.plain)
+                .foregroundColor(Color(hex: "#60A5FA"))
+            }
+        }
+        .onAppear { checkPermissions() }
+    }
+
+    private var permissionLabel: String {
+        if !micOK && !speechOK { return "Microphone & speech access needed —" }
+        if !micOK               { return "Microphone access needed —" }
+        return "Speech recognition access needed —"
+    }
+
+    private func checkPermissions() {
+        micOK    = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        speechOK = SFSpeechRecognizer.authorizationStatus() == .authorized
     }
 }

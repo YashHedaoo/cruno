@@ -164,6 +164,20 @@ let BotStates: [BotState: BotStateCfg] = [
         glow: CGColor(red:0.957,green:0.447,blue:0.714,alpha:1), glowOpacity:0.55,
         bounces:false, scans:false, breathes:false, zz:false, sweat:false,
         look:nil, tilt:0, sound:"dizzy"),
+    .listening: BotStateCfg(
+        color: CGColor(red:0.133,green:0.831,blue:0.627,alpha:1), tint:0.60,
+        eye:.wide, badge:nil,
+        badgeColor: .white,
+        glow: CGColor(red:0.133,green:0.831,blue:0.627,alpha:1), glowOpacity:0.60,
+        bounces:false, scans:true, breathes:true, zz:false, sweat:false,
+        look:nil, tilt:0.05, sound:nil),
+    .speaking: BotStateCfg(
+        color: CGColor(red:0.204,green:0.831,blue:0.600,alpha:1), tint:0.45,
+        eye:.happy, badge:nil,
+        badgeColor: .white,
+        glow: CGColor(red:0.204,green:0.831,blue:0.600,alpha:1), glowOpacity:0.50,
+        bounces:true, scans:false, breathes:true, zz:false, sweat:false,
+        look:nil, tilt:0, sound:nil),
 ]
 
 // MARK: - Bot engine
@@ -210,6 +224,9 @@ final class BotEngine: ObservableObject {
     var tgSy:     CGFloat = 1
     var tgSx:     CGFloat = 1
     var tgEs:     CGFloat = 1   // eye-scale target (hover love: 1.08, normal: 1)
+
+    // Voice-reactivity level (0.0 ... 1.0 from microphone audio)
+    var voiceLevel: CGFloat = 0
 
     // Particle canvas overhang (extra canvas height at top for hearts to fly into)
     var particleOverhang: CGFloat = 0
@@ -867,6 +884,18 @@ final class BotEngine: ObservableObject {
             tgSx = 1 - sin(t * 2.2) * 0.02
         } else {
             tgSy = 1; tgSx = 1
+        }
+
+        // Voice reactivity while listening to the user
+        if state == .listening {
+            let vp = min(1.0, max(0.0, voiceLevel))
+            tgSy += vp * 0.12
+            tgSx -= vp * 0.05
+            tgEs = 1.0 + vp * 0.16
+            tgTilt += vp * 0.07
+            if !locks.contains("oy") {
+                oy -= vp * 0.04
+            }
         }
 
         // Mini bots: periodic dramatic behaviors

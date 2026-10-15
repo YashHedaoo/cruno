@@ -137,6 +137,8 @@ targets:
         NSCalendarsFullAccessUsageDescription: "Allow Cruno to save and sync events with your Calendar."
         NSCalendarsUsageDescription: "Allow Cruno to save and sync events with your Calendar."
         NSAccessibilityUsageDescription: "Pour lire le titre de la fenêtre active et l'attacher comme contexte."
+        NSMicrophoneUsageDescription: "Cruno listens for the wake word 'Cruno' to activate the voice assistant. Audio is processed entirely on-device."
+        NSSpeechRecognitionUsageDescription: "Cruno uses on-device speech recognition to hear your voice commands after you say 'Cruno'."
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         CFBundleLocalizations:

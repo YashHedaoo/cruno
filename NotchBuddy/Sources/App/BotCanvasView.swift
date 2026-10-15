@@ -21,6 +21,7 @@ struct BotCanvasView: View {
                 engine.lookX = lookX(state: state, size: size)
                 engine.lookY = lookY(state: state, size: size)
                 engine.particleOverhang = particleOverhang
+                engine.voiceLevel = CGFloat(state.voiceAudioLevel)
                 // Widen slot when file is hovering over the mailbox (morph > 0.5)
                 // Open mouth (hover=0.20R) when file dragged over box; close when not
                 if engine.morph > 0.3 {
@@ -69,6 +70,10 @@ struct BotCanvasView: View {
                 let showOutfit = isFocusMain || state.mode != .expanded || isWardrobe
                 engine.setOutfit(showOutfit ? state.resolvedOutfit : .none,
                                  animated: state.view != .wardrobe)
+
+                if engine.state != state.effectiveState {
+                    engine.setState(state.effectiveState)
+                }
 
                 engine.update(dt: dt)
                 var ctx = context

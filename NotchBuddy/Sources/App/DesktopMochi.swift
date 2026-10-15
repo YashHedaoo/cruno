@@ -27,77 +27,86 @@ struct DesktopBotView: View {
     @ObservedObject var viewState: DesktopBotViewState
 
     var body: some View {
-        TimelineView(.animation(
-            minimumInterval: viewState.isSleeping ? 1.0 / 10.0 : 1.0 / 30.0,
-            paused: viewState.paused
-        )) { timeline in
-            Canvas { ctx, size in
-                let now = timeline.date.timeIntervalSinceReferenceDate
-                let dt  = min(0.05, now - engine.lastTime)
+        ZStack {
+            TimelineView(.animation(
+                minimumInterval: viewState.isSleeping ? 1.0 / 10.0 : 1.0 / 30.0,
+                paused: viewState.paused
+            )) { timeline in
+                Canvas { ctx, size in
+                    let now = timeline.date.timeIntervalSinceReferenceDate
+                    let dt  = min(0.05, now - engine.lastTime)
 
-                // Cinema Mode (Movie / Fullscreen Video) vs Music Dance
-                let isMediaPlaying = appState.musicPlaying || NowPlayingManager.shared.isPlaying
-                let isMovie = NowPlayingManager.shared.isWatchingMovie || appState.isWatchingMovie
-                engine.setWatchingMovie(isMovie)
+                    // Cinema Mode (Movie / Fullscreen Video) vs Music Dance
+                    let isMediaPlaying = appState.musicPlaying || NowPlayingManager.shared.isPlaying
+                    let isMovie = NowPlayingManager.shared.isWatchingMovie || appState.isWatchingMovie
+                    engine.setWatchingMovie(isMovie)
 
-                // Eye tracking based on panel position (attentive screen gaze when watching movie)
-                if engine.isWatchingMovie {
-                    let mouseDistX = (appState.mousePosition.x - viewState.lookOrigin.x)
-                    let mouseDistY = (appState.mousePosition.y - viewState.lookOrigin.y)
-                    let mouseSpeed = hypot(mouseDistX, mouseDistY)
-                    let screenGazeX = CGFloat(sin(now * 0.4) * 0.10)
-                    let screenGazeY: CGFloat = 0.35
-                    if mouseSpeed > 450 {
-                        engine.lookX = tanh(mouseDistX / 280) * 0.4 + screenGazeX * 0.6
-                        engine.lookY = -tanh(mouseDistY / 220) * 0.2 + screenGazeY * 0.8
+                    // Eye tracking based on panel position (attentive screen gaze when watching movie)
+                    if engine.isWatchingMovie {
+                        let mouseDistX = (appState.mousePosition.x - viewState.lookOrigin.x)
+                        let mouseDistY = (appState.mousePosition.y - viewState.lookOrigin.y)
+                        let mouseSpeed = hypot(mouseDistX, mouseDistY)
+                        let screenGazeX = CGFloat(sin(now * 0.4) * 0.10)
+                        let screenGazeY: CGFloat = 0.35
+                        if mouseSpeed > 450 {
+                            engine.lookX = tanh(mouseDistX / 280) * 0.4 + screenGazeX * 0.6
+                            engine.lookY = -tanh(mouseDistY / 220) * 0.2 + screenGazeY * 0.8
+                        } else {
+                            engine.lookX = screenGazeX
+                            engine.lookY = screenGazeY
+                        }
                     } else {
-                        engine.lookX = screenGazeX
-                        engine.lookY = screenGazeY
+                        engine.lookX = tanh((appState.mousePosition.x - viewState.lookOrigin.x) / 260)
+                        engine.lookY = -tanh((appState.mousePosition.y - viewState.lookOrigin.y) / 200)
                     }
-                } else {
-                    engine.lookX = tanh((appState.mousePosition.x - viewState.lookOrigin.x) / 260)
-                    engine.lookY = -tanh((appState.mousePosition.y - viewState.lookOrigin.y) / 200)
+
+                    // Desktop Mochi is always the "main" Mochi — always dressed
+                    engine.setOutfit(appState.resolvedOutfit, animated: true)
+
+                    // Dance when music plays (suppressed during cinema movie mode)
+                    let dancing: Bool = {
+                        #if !APPSTORE
+                        guard isMediaPlaying && !isMovie else { return false }
+                        let allowed: Set<BotState> = [.idle, .working, .thinking, .searching, .finished]
+                        return allowed.contains(appState.effectiveState)
+                        #else
+                        return false
+                        #endif
+                    }()
+                    engine.setDancing(dancing)
+                    engine.voiceLevel = CGFloat(appState.voiceAudioLevel)
+                    engine.update(dt: dt)
+
+                    var c = ctx
+                    engine.applyDance(&c, size: size)
+
+                    // Rigid roll when outfit is present (matches BotCanvasView)
+                    if engine.outfit != .none && engine.outfitPresence > 0.05 && abs(engine.roll) > 0.001 {
+                        let center = engine.bodyCenter(size: size)
+                        var rigidCtx = c
+                        rigidCtx.translateBy(x: center.x, y: center.y)
+                        rigidCtx.rotate(by: .radians(engine.roll))
+                        rigidCtx.translateBy(x: -center.x, y: -center.y)
+                        engine.drawHandsBehind(context: rigidCtx, size: size)
+                        engine.drawOutfitBehind(context: rigidCtx, size: size)
+                        engine.draw(context: rigidCtx, size: size)
+                        engine.drawOutfitFront(context: rigidCtx, size: size)
+                    } else {
+                        engine.drawHandsBehind(context: c, size: size)
+                        engine.drawOutfitBehind(context: c, size: size)
+                        engine.draw(context: c, size: size)
+                        engine.drawOutfitFront(context: c, size: size)
+                    }
+                    engine.drawHandsAndExtras(context: c, size: size)
                 }
+            }
 
-                // Desktop Mochi is always the "main" Mochi — always dressed
-                engine.setOutfit(appState.resolvedOutfit, animated: true)
-
-                // Dance when music plays (suppressed during cinema movie mode)
-                let dancing: Bool = {
-                    #if !APPSTORE
-                    guard isMediaPlaying && !isMovie else { return false }
-                    let allowed: Set<BotState> = [.idle, .working, .thinking, .searching, .finished]
-                    return allowed.contains(appState.effectiveState)
-                    #else
-                    return false
-                    #endif
-                }()
-                engine.setDancing(dancing)
-                engine.update(dt: dt)
-
-                var c = ctx
-                engine.applyDance(&c, size: size)
-
-                // Rigid roll when outfit is present (matches BotCanvasView)
-                if engine.outfit != .none && engine.outfitPresence > 0.05 && abs(engine.roll) > 0.001 {
-                    let center = engine.bodyCenter(size: size)
-                    var rigidCtx = c
-                    rigidCtx.translateBy(x: center.x, y: center.y)
-                    rigidCtx.rotate(by: .radians(engine.roll))
-                    rigidCtx.translateBy(x: -center.x, y: -center.y)
-                    engine.drawHandsBehind(context: rigidCtx, size: size)
-                    engine.drawOutfitBehind(context: rigidCtx, size: size)
-                    engine.draw(context: rigidCtx, size: size)
-                    engine.drawOutfitFront(context: rigidCtx, size: size)
-                } else {
-                    engine.drawHandsBehind(context: c, size: size)
-                    engine.drawOutfitBehind(context: c, size: size)
-                    engine.draw(context: c, size: size)
-                    engine.drawOutfitFront(context: c, size: size)
-                }
-                engine.drawHandsAndExtras(context: c, size: size)
+            if appState.voicePhase != .idle {
+                DesktopMochiVoiceHaloView(appState: appState, outfit: appState.resolvedOutfit)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: appState.voicePhase)
         .onChange(of: appState.effectiveState) { _, newState in
             engine.setState(newState)
         }
@@ -149,6 +158,11 @@ final class DesktopMochiController {
     private var alertPanel: NSPanel?
     private var alertKeyDownMonitor: Any?
     private var alertIsRightSide: Bool = true
+
+    // Voice overlay (halo above head + bubble beside Mochi)
+    private var voiceHaloPanel: NSPanel?
+    private var voiceBubblePanel: NSPanel?
+    private var voiceBubbleIsRightSide: Bool = true
 
     // Alert state machine
     private var phase: DesktopPhase = .home
@@ -347,6 +361,7 @@ final class DesktopMochiController {
     func flyHome() {
         guard let p = panel else { return }
         closeAlertPanel(animated: false)
+        closeVoiceOverlay(animated: false)
         phase = .home
         pendingSlapWorkItem?.cancel()
         stopPolling()
@@ -375,6 +390,8 @@ final class DesktopMochiController {
     /// `launchFlyIfNeeded` restores Mochi once the alert is dismissed.
     private func retractForAlert() {
         guard let p = panel else { return }
+        closeAlertPanel(animated: false)
+        closeVoiceOverlay(animated: false)
         stopPolling()
         removeEventMonitors()
         cancellables.removeAll()
@@ -417,6 +434,7 @@ final class DesktopMochiController {
     }
 
     private func fullTearDown() {
+        closeVoiceOverlay(animated: false)
         closeAlertPanel(animated: false)
         phase = .home
         cancellables.removeAll()
@@ -610,6 +628,9 @@ final class DesktopMochiController {
                 self.viewState?.lookOrigin = self.lookOriginFor(panel: p)
                 if self.alertPanel != nil {
                     self.updateAlertPanelPosition(animated: false)
+                }
+                if self.voiceHaloPanel != nil || self.voiceBubblePanel != nil {
+                    self.updateVoiceOverlayPosition(animated: false)
                 }
             }
             return event
@@ -868,6 +889,132 @@ final class DesktopMochiController {
         }, completionHandler: {
             Task { @MainActor in
                 ap.close()
+            }
+        })
+    }
+
+    // MARK: - Voice Assistant In-Place Overlay
+
+    func showVoiceOverlay() {
+        guard let p = panel else { return }
+        wakeUpIfNeeded()
+        let cardSize = CGSize(width: 320, height: 96)
+        let screen = p.screen ?? NSScreen.main ?? NSScreen.screens[0]
+        let placement = DesktopMochiLogic.sideDockPlacement(
+            mochiFrame: p.frame,
+            cardSize: cardSize,
+            visibleFrame: screen.visibleFrame,
+            spacing: 12,
+            margin: 16
+        )
+        self.voiceBubbleIsRightSide = placement.isRightSide
+
+        // Turn Mochi's gaze toward the speech bubble
+        engine?.lookX = placement.isRightSide ? 0.7 : -0.7
+        engine?.lookY = 0.0
+
+        // Perk up bounce & head tilt
+        engine?.anim("oy", keys: [
+            TweenKey(target: -0.16, duration: 80, ease: Ease.out),
+            TweenKey(target: 0.0, duration: 160, ease: Ease.back)
+        ])
+        engine?.anim("tilt", keys: [
+            TweenKey(target: placement.isRightSide ? 0.08 : -0.08, duration: 120, ease: Ease.out)
+        ])
+
+        if let existing = voiceBubblePanel {
+            existing.setFrame(NSRect(origin: placement.origin, size: cardSize), display: true, animate: true)
+            existing.orderFront(nil)
+            return
+        }
+
+        let vp = DesktopAlertPanel(
+            contentRect: NSRect(origin: placement.origin, size: cardSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        vp.backgroundColor = NSColor.clear
+        vp.isOpaque = false
+        vp.hasShadow = true
+        vp.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.mainMenuWindow)) + 3)
+        vp.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        vp.ignoresMouseEvents = false
+
+        let bubbleView = DesktopMochiVoiceBubbleView(
+            appState: AppState.shared,
+            isRightSide: placement.isRightSide,
+            onClose: {
+                VoiceCoordinator.shared.dismiss()
+            }
+        )
+        let hosting = NSHostingView(rootView: bubbleView)
+        hosting.frame = CGRect(origin: .zero, size: cardSize)
+        hosting.autoresizingMask = [.width, .height]
+        vp.contentView = hosting
+
+        let slideOffset: CGFloat = placement.isRightSide ? -16 : 16
+        let startOrigin = NSPoint(x: placement.origin.x + slideOffset, y: placement.origin.y)
+        vp.setFrameOrigin(startOrigin)
+        vp.alphaValue = 0
+        vp.orderFront(self)
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.22
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1.0, 0.3, 1.0)
+            vp.animator().setFrameOrigin(placement.origin)
+            vp.animator().alphaValue = 1.0
+        }
+
+        self.voiceBubblePanel = vp
+    }
+
+    func updateVoiceOverlayPosition(animated: Bool) {
+        guard let p = panel, let vp = voiceBubblePanel else { return }
+        let screen = p.screen ?? NSScreen.main ?? NSScreen.screens[0]
+        let placement = DesktopMochiLogic.sideDockPlacement(
+            mochiFrame: p.frame,
+            cardSize: vp.frame.size,
+            visibleFrame: screen.visibleFrame,
+            spacing: 12,
+            margin: 16
+        )
+        self.voiceBubbleIsRightSide = placement.isRightSide
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.18
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                vp.animator().setFrameOrigin(placement.origin)
+            }
+        } else {
+            vp.setFrameOrigin(placement.origin)
+        }
+    }
+
+    func closeVoiceOverlay(animated: Bool = true) {
+        guard let vp = voiceBubblePanel else { return }
+        voiceBubblePanel = nil
+
+        // Reset head tilt and happy emote
+        engine?.anim("tilt", keys: [TweenKey(target: 0.0, duration: 150, ease: Ease.inOut)])
+        engine?.triggerEmote(.happy, duration: 0.8, silent: true)
+
+        if !animated {
+            vp.close()
+            return
+        }
+
+        let slideOffset: CGFloat = voiceBubbleIsRightSide ? -14 : 14
+        let targetOrigin = NSPoint(x: vp.frame.origin.x + slideOffset, y: vp.frame.origin.y)
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            vp.animator().setFrameOrigin(targetOrigin)
+            vp.animator().alphaValue = 0.0
+        }, completionHandler: {
+            Task { @MainActor in
+                vp.close()
             }
         })
     }
@@ -1443,4 +1590,224 @@ struct DesktopQuestionCard: View {
         HookServer.shared.sendQuestionAnswers(answers)
     }
 }
+
+// MARK: - Desktop Mochi Voice Halo / Head Waveform Crown
+
+struct DesktopMochiVoiceHaloView: View {
+    @ObservedObject var appState: AppState
+    let outfit: Outfit
+
+    private let barCount = 13
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let isTallHat = (outfit == .witchHat || outfit == .partyHat || outfit == .santaHat)
+            let crownY: CGFloat = isTallHat ? 12 : 20
+
+            ZStack {
+                // Subtle radial cyan/purple glow behind the halo
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                (appState.voicePhase == .thinking ? Color(hex: "#A78BFA") : Color(hex: "#22D3A0")).opacity(0.35),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 28
+                        )
+                    )
+                    .frame(width: 56, height: 32)
+                    .blur(radius: 6)
+                    .position(x: 60, y: crownY)
+
+                switch appState.voicePhase {
+                case .listening:
+                    // Curved 13-bar audio halo / crown
+                    HStack(alignment: .center, spacing: 2.2) {
+                        ForEach(0..<barCount, id: \.self) { i in
+                            let center = Double(barCount - 1) / 2.0
+                            let distFromCenter = abs(Double(i) - center) / center
+                            let archOffset = (1.0 - pow(distFromCenter, 2.0)) * -3.5
+
+                            let phase = Double(i) * 0.55
+                            let wave = (sin(time * 6.5 + phase) + 1.0) * 0.5
+                            let idleH: CGFloat = 3.5 + CGFloat(wave) * 6.5
+                            let voiceBoost: CGFloat = CGFloat(min(1.0, max(0.0, appState.voiceAudioLevel))) * 22.0 * (1.0 - CGFloat(distFromCenter) * 0.35)
+                            let totalH = min(26.0, max(3.5, idleH + voiceBoost))
+
+                            RoundedRectangle(cornerRadius: 1.25)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(hex: "#10B981"),
+                                            Color(hex: "#22D3A0"),
+                                            Color(hex: "#38BDF8")
+                                        ],
+                                        startPoint: .bottom,
+                                        endPoint: .top
+                                    )
+                                )
+                                .frame(width: 2.5, height: totalH)
+                                .offset(y: CGFloat(archOffset))
+                        }
+                    }
+                    .frame(height: 28)
+                    .position(x: 60, y: crownY)
+
+                case .thinking:
+                    // Floating amethyst jumping dots
+                    HStack(spacing: 5) {
+                        ForEach(0..<3, id: \.self) { i in
+                            let offset = sin(time * 7.0 - Double(i) * 0.9) * 4.0
+                            Circle()
+                                .fill(Color(hex: "#A78BFA"))
+                                .frame(width: 4.5, height: 4.5)
+                                .offset(y: CGFloat(offset))
+                        }
+                    }
+                    .frame(height: 20)
+                    .position(x: 60, y: crownY)
+
+                case .responding:
+                    // Pulsating sound ripples / mini sparkle waves
+                    HStack(alignment: .center, spacing: 2.5) {
+                        ForEach(0..<5, id: \.self) { i in
+                            let h = 4.0 + (sin(time * 9.0 + Double(i) * 1.1) + 1.0) * 4.0
+                            RoundedRectangle(cornerRadius: 1.2)
+                                .fill(Color(hex: "#4ADEBD"))
+                                .frame(width: 2.5, height: CGFloat(h))
+                        }
+                    }
+                    .frame(height: 22)
+                    .position(x: 60, y: crownY)
+
+                case .idle:
+                    EmptyView()
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: appState.voicePhase)
+        }
+    }
+}
+
+// MARK: - Desktop Mochi Voice Speech Bubble
+
+struct DesktopMochiVoiceBubbleView: View {
+    @ObservedObject var appState: AppState
+    let isRightSide: Bool
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            SideDockFrostedGlass()
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(hex: "#0A0D12").opacity(0.88))
+
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            (appState.voicePhase == .thinking ? Color(hex: "#A78BFA") : Color(hex: "#22D3A0")).opacity(0.35),
+                            Color.white.opacity(0.06)
+                        ],
+                        startPoint: isRightSide ? .leading : .trailing,
+                        endPoint: isRightSide ? .trailing : .leading
+                    ),
+                    lineWidth: 1
+                )
+
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row
+                HStack(spacing: 6) {
+                    Image(systemName: headerIcon)
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .foregroundColor(headerColor)
+                    Text(headerLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(headerColor)
+
+                    Spacer()
+
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8.5, weight: .medium))
+                            .foregroundColor(Color(hex: "#6F7684"))
+                            .frame(width: 16, height: 16)
+                            .background(Color.white.opacity(0.06))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.bottom, 6)
+
+                // Body content
+                switch appState.voicePhase {
+                case .listening:
+                    Text(appState.voiceTranscript.isEmpty ? "Speak to Cruno…" : "\"\(appState.voiceTranscript)\"")
+                        .font(.system(size: 12.5, weight: appState.voiceTranscript.isEmpty ? .regular : .medium))
+                        .foregroundColor(appState.voiceTranscript.isEmpty ? Color(hex: "#8E939C") : Color(hex: "#F1F5F9"))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 28)
+
+                case .thinking:
+                    HStack(spacing: 6) {
+                        Text(appState.voiceTranscript.isEmpty ? "Thinking…" : "\"\(appState.voiceTranscript)\"")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "#A78BFA"))
+                            .lineLimit(2)
+                    }
+                    .frame(minHeight: 28, alignment: .leading)
+
+                case .responding, .idle:
+                    ScrollView(showsIndicators: false) {
+                        Text(appState.voiceResponse.isEmpty ? "…" : appState.voiceResponse)
+                            .font(.system(size: 12.5))
+                            .foregroundColor(Color(hex: "#E8ECF0"))
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 70)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+        }
+        .frame(width: 320, height: 96)
+        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
+    }
+
+    private var headerIcon: String {
+        switch appState.voicePhase {
+        case .listening:  return "waveform"
+        case .thinking:   return "ellipsis"
+        case .responding: return "sparkles"
+        case .idle:       return "checkmark"
+        }
+    }
+
+    private var headerLabel: String {
+        switch appState.voicePhase {
+        case .listening:  return "Listening"
+        case .thinking:   return "Thinking"
+        case .responding: return "Cruno"
+        case .idle:       return "Done"
+        }
+    }
+
+    private var headerColor: Color {
+        switch appState.voicePhase {
+        case .listening:  return Color(hex: "#22D3A0")
+        case .thinking:   return Color(hex: "#A78BFA")
+        case .responding: return Color(hex: "#4ADEBD")
+        case .idle:       return Color(hex: "#94A3B8")
+        }
+    }
+}
+
 

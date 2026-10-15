@@ -215,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if !APPSTORE
         _ = MusicController.shared
         #endif
+        VoiceCoordinator.shared.setup()
     }
 }
 

@@ -50,9 +50,11 @@
 	<string>Allow Cruno to save and sync events with your Calendar.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cruno listens for the wake word 'Cruno' to activate the voice assistant. Audio is processed entirely on-device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Cruno uses on-device speech recognition to hear your voice commands after you say 'Cruno'.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
-	<key>NSSupportsAutomaticTermination</key>
-	<false/>
 </dict>
 </plist>

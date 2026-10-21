@@ -64,6 +64,7 @@ final class KeychainStore: @unchecked Sendable {
         "anthropic-api-key",
         "google-api-key",
         "openai-api-key",
+        "opencode-api-key",
         "resend-api-key", "resend-from",
         "n8n-url", "n8n-api-key",
         "vercel-token",
@@ -175,6 +176,35 @@ final class ClaudeService {
             .map { (id: $0.id, label: $0.id) }
     }
 
+    /// Fetches chat models from OpenCode API.
+    static func fetchOpenCodeModels(apiKey: String) async -> [(id: String, label: String)] {
+        guard let url = URL(string: "https://api.opencode.ai/v1/models") else { return [] }
+        var req = URLRequest(url: url, timeoutInterval: 10)
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = json["data"] as? [[String: Any]] else {
+            // Fallback list of common OpenCode models if list endpoint is unavailable
+            return [
+                (id: "opencode/default", label: "OpenCode Default"),
+                (id: "opencode/claude-3-5-sonnet", label: "OpenCode Claude 3.5 Sonnet"),
+                (id: "opencode/gpt-4o", label: "OpenCode GPT-4o"),
+                (id: "opencode/deepseek-coder", label: "OpenCode DeepSeek Coder")
+            ]
+        }
+        let list = items.compactMap { item -> (id: String, label: String)? in
+            guard let id = item["id"] as? String else { return nil }
+            return (id: id, label: id)
+        }
+        return list.isEmpty ? [
+            (id: "opencode/default", label: "OpenCode Default"),
+            (id: "opencode/claude-3-5-sonnet", label: "OpenCode Claude 3.5 Sonnet"),
+            (id: "opencode/gpt-4o", label: "OpenCode GPT-4o"),
+            (id: "opencode/deepseek-coder", label: "OpenCode DeepSeek Coder")
+        ] : list
+    }
+
     /// Chosen in Settings; falls back to the default when the field is left empty.
     private var model: String {
         let m = AppState.shared.claudeModel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -283,8 +313,9 @@ final class ClaudeService {
             baseURL = LocalChat.normaliseURL(state.lmstudioServerURL)
         } else {
             switch provider {
-            case .google:  baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
-            case .openai:  baseURL = "https://api.openai.com/v1"
+            case .google:    baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
+            case .openai:    baseURL = "https://api.openai.com/v1"
+            case .opencode:  baseURL = "https://api.opencode.ai/v1"
             case .anthropic, .ollama, .lmstudio: baseURL = ""
             }
         }

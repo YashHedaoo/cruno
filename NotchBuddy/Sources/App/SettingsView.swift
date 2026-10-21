@@ -90,6 +90,7 @@ struct SettingsView: View {
     // Multi-provider chat keys
     @State private var googleKey: String  = KeychainStore.shared.get("google-api-key") ?? ""
     @State private var openAIKey: String  = KeychainStore.shared.get("openai-api-key") ?? ""
+    @State private var openCodeKey: String = KeychainStore.shared.get("opencode-api-key") ?? ""
     @State private var ollamaURL:    String = AppState.shared.ollamaServerURL
     @State private var lmstudioURL:  String = AppState.shared.lmstudioServerURL
     @State private var connectingOllama:    Bool = false
@@ -1049,6 +1050,20 @@ struct SettingsView: View {
                     statusMessage = String(localized: "status.openai-key-saved")
                 }
                 .buttonStyle(.borderedProminent)
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: "#4ADE80")).frame(width: 8, height: 8)
+                    Text("OpenCode").font(.system(size: 12, weight: .semibold))
+                }
+                SecureField("OpenCode API key", text: $openCodeKey)
+                    .textFieldStyle(.roundedBorder)
+                Button(String(localized: "Save")) {
+                    KeychainStore.shared.set("opencode-api-key", value: openCodeKey)
+                    statusMessage = "OpenCode API key saved."
+                }
+                .buttonStyle(.borderedProminent)
             }
             .padding(.vertical, 4)
         }
@@ -1791,8 +1806,7 @@ struct SettingsView: View {
                     let url = provider == .ollama ? state.ollamaServerURL : state.lmstudioServerURL
                     if url.isEmpty { return String(localized: "Not connected") }
                 } else {
-                    let keyId = def.id == "ai_anthropic" ? "anthropic-api-key"
-                               : def.id == "ai_google"    ? "google-api-key" : "openai-api-key"
+                    let keyId = ChatProvider(pillID: def.id)?.keychainKey ?? "openai-api-key"
                     if KeychainStore.shared.get(keyId) == nil { return String(localized: "Key not configured") }
                 }
             }

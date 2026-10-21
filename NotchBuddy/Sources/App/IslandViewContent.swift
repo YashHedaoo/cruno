@@ -247,6 +247,8 @@ struct OverviewView: View {
             switchChatProvider(.google)
         case "ai_openai":
             switchChatProvider(.openai)
+        case "ai_opencode":
+            switchChatProvider(.opencode)
         case "ai_ollama":
             switchChatProvider(.ollama)
         case "ai_lmstudio":
@@ -1458,6 +1460,7 @@ struct ModelPickerView: View {
                             case .anthropic: state.claudeModel = model.id
                             case .google:    state.googleChatModel = model.id
                             case .openai:    state.openAIChatModel = model.id
+                            case .opencode:  state.openCodeChatModel = model.id
                             case .ollama:    state.ollamaChatModel = model.id
                             case .lmstudio:  state.lmstudioChatModel = model.id
                             }

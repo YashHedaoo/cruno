@@ -199,6 +199,7 @@ final class VoiceCoordinator {
         switch provider {
         case .google:   baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
         case .openai:   baseURL = "https://api.openai.com/v1"
+        case .opencode: baseURL = "https://api.opencode.ai/v1"
         case .ollama:   baseURL = LocalChat.normaliseURL(s.ollamaServerURL)
         case .lmstudio: baseURL = LocalChat.normaliseURL(s.lmstudioServerURL)
         case .anthropic: return

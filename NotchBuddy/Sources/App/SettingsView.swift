@@ -95,6 +95,7 @@ struct SettingsView: View {
     @State private var lmstudioURL:  String = AppState.shared.lmstudioServerURL
     @State private var connectingOllama:    Bool = false
     @State private var connectingLMStudio:  Bool = false
+    @ObservedObject private var permissions = PermissionManager.shared
 
     // Integration keys
     @State private var resendKey: String    = KeychainStore.shared.get("resend-api-key")  ?? ""
@@ -1149,7 +1150,7 @@ struct SettingsView: View {
         }
 
         GroupBox("System & App Automation") {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Circle().fill(Color(hex: "#22D3A0")).frame(width: 8, height: 8)
                     Text("Mac System & Browser Control").font(.system(size: 12, weight: .semibold))
@@ -1168,23 +1169,104 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 8) {
-                    Button("Open Accessibility Settings") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                            NSWorkspace.shared.open(url)
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(permissions.hasAccessibility ? Color.green : Color.orange)
+                            .frame(width: 7, height: 7)
+                        Text("Accessibility API")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        if permissions.hasAccessibility {
+                            Text("Granted")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Button("Grant Access") {
+                                permissions.requestAccessibility()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
                     }
-                    .buttonStyle(.bordered)
 
-                    Button("Open Automation Settings") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
-                            NSWorkspace.shared.open(url)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(permissions.hasChromeAutomation ? Color.green : Color.orange)
+                            .frame(width: 7, height: 7)
+                        Text("Google Chrome Automation")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        if permissions.hasChromeAutomation {
+                            Text("Authorized")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Button("Request Access") {
+                                permissions.requestChromeAutomation()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
+                    }
+
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(permissions.hasScreenCapture ? Color.green : Color.secondary)
+                            .frame(width: 7, height: 7)
+                        Text("Screen Capture (Vision Ready)")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        if permissions.hasScreenCapture {
+                            Text("Available")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Button("Enable") {
+                                permissions.requestScreenCapture()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+
+                Divider()
+
+                HStack(spacing: 8) {
+                    Button(action: {
+                        Task { await permissions.runSelfTest() }
+                    }) {
+                        if permissions.isRunningSelfTest {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Run Diagnostics Self-Test")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(permissions.isRunningSelfTest)
+
+                    Button("Open macOS Privacy Settings") {
+                        permissions.openPrivacySettings(pane: .accessibility)
                     }
                     .buttonStyle(.bordered)
                 }
+
+                if let report = permissions.selfTestReport {
+                    Text(report)
+                        .font(.system(size: 10, design: .monospaced))
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(6)
+                }
             }
             .padding(.vertical, 4)
+            .onAppear {
+                permissions.refreshPermissions()
+            }
         }
     }
 

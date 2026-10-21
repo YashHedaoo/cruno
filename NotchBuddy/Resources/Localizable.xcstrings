@@ -135,6 +135,9 @@
     "$" : {
 
     },
+    "Active" : {
+
+    },
     "Active pills" : {
       "localizations" : {
         "ar" : {
@@ -3618,6 +3621,9 @@
 
     },
     "Cruno · github.com/YashHedaoo/cruno" : {
+
+    },
+    "Cruno can control Google Chrome, open URLs, search the web, read active tabs, launch/switch applications, read/write clipboard, and control system volume directly from your chat." : {
 
     },
     "Demo mode" : {
@@ -7363,6 +7369,9 @@
         }
       }
     },
+    "Mac System & Browser Control" : {
+
+    },
     "Mail not available." : {
       "localizations" : {
         "ar" : {
@@ -9198,6 +9207,9 @@
           }
         }
       }
+    },
+    "OpenRouter / OpenCode" : {
+
     },
     "Other…" : {
       "localizations" : {
@@ -18941,6 +18953,9 @@
           }
         }
       }
+    },
+    "Supports DeepSeek, Claude, GPT-4o, Llama, and more via openrouter.ai" : {
+
     },
     "System" : {
       "localizations" : {

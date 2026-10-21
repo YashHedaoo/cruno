@@ -335,6 +335,7 @@ final class ClaudeService {
             var currentBody = body
             var data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
             var loopCount = 0
+            var executedActionSummaries: [String] = []
             while loopCount < 4 {
                 loopCount += 1
                 guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -342,7 +343,7 @@ final class ClaudeService {
 
                 let toolUses = content.filter { ($0["type"] as? String) == "tool_use" }
                 if toolUses.isEmpty {
-                    await handleChatResult(data, state: state)
+                    await handleChatResult(data, state: state, actionSummaries: executedActionSummaries)
                     return
                 }
 
@@ -354,6 +355,10 @@ final class ClaudeService {
                     let toolName = tu["name"] as? String ?? ""
                     let toolInput = tu["input"] as? [String: Any] ?? [:]
                     let result = await SystemAutomationEngine.shared.executeTool(name: toolName, arguments: toolInput)
+                    let summary = SystemAutomationEngine.formatActionSummary(name: toolName, arguments: toolInput)
+                    if !summary.isEmpty {
+                        executedActionSummaries.append(summary)
+                    }
                     toolResults.append([
                         "type": "tool_result",
                         "tool_use_id": toolId,
@@ -364,7 +369,7 @@ final class ClaudeService {
                 currentBody["messages"] = conversationMessages
                 data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
             }
-            await handleChatResult(data, state: state)
+            await handleChatResult(data, state: state, actionSummaries: executedActionSummaries)
         } catch {
             conversationMessages.removeLast()
             await showError(error.localizedDescription, state: state)
@@ -533,6 +538,7 @@ final class ClaudeService {
             do {
                 var currentMsgs = msgs
                 var loopCount = 0
+                var executedActionSummaries: [String] = []
                 while loopCount < 5 {
                     loopCount += 1
                     body["messages"] = currentMsgs
@@ -565,6 +571,10 @@ final class ClaudeService {
                             let args = (try? JSONSerialization.jsonObject(with: Data(argsStr.utf8))) as? [String: Any] ?? [:]
 
                             let output = await SystemAutomationEngine.shared.executeTool(name: fnName, arguments: args)
+                            let summary = SystemAutomationEngine.formatActionSummary(name: fnName, arguments: args)
+                            if !summary.isEmpty {
+                                executedActionSummaries.append(summary)
+                            }
 
                             let toolMsg: [String: Any] = [
                                 "role": "tool",
@@ -578,9 +588,13 @@ final class ClaudeService {
                     }
 
                     let content = (message["content"] as? String) ?? ""
-                    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    conversationMessages.append(["role": "assistant", "content": trimmed])
-                    state.chatHistory.append(ChatMessage(role: .assistant, content: trimmed))
+                    var finalDisplay = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !executedActionSummaries.isEmpty {
+                        let banner = "> ⚡ **Action:** " + executedActionSummaries.joined(separator: " • ")
+                        finalDisplay = banner + "\n\n" + finalDisplay
+                    }
+                    conversationMessages.append(["role": "assistant", "content": finalDisplay])
+                    state.chatHistory.append(ChatMessage(role: .assistant, content: finalDisplay))
                     state.stateOverride = nil
                     state.view = .prompt
                     NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
@@ -681,7 +695,7 @@ final class ClaudeService {
 
     // MARK: - Chat result handler
 
-    private func handleChatResult(_ data: Data, state: AppState) async {
+    private func handleChatResult(_ data: Data, state: AppState, actionSummaries: [String] = []) async {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]] else {
             await showError("Unexpected API response.", state: state)
@@ -696,8 +710,14 @@ final class ClaudeService {
             return
         }
 
+        var displayText = text
+        if !actionSummaries.isEmpty {
+            let banner = "> ⚡ **Action:** " + actionSummaries.joined(separator: " • ")
+            displayText = banner + "\n\n" + displayText
+        }
+
         // Add to display history
-        state.chatHistory.append(ChatMessage(role: .assistant, content: text))
+        state.chatHistory.append(ChatMessage(role: .assistant, content: displayText))
 
         state.stateOverride = nil
         state.view = .prompt

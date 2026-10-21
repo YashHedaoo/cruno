@@ -54,6 +54,7 @@
 		266BF7EF8D8F009084F23A24 /* finish.wav in Resources */ = {isa = PBXBuildFile; fileRef = 37147F42613183DBA8896835 /* finish.wav */; };
 		2875610F701376BD65573386 /* WindowContextCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFA /* WindowContextCapture.swift */; };
 		2875610F701376BD65573387 /* SystemAutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFB /* SystemAutomationEngine.swift */; };
+		2875610F701376BD65573388 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFC /* PermissionManager.swift */; };
 		28E2C766BBA2167BDD4FFDB8 /* NotificationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB831F5623E699A2506698E /* NotificationViewController.swift */; };
 		293DAEADCB4487334E30578C /* IslandTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1C6553AF2EC95BE2AAFEC1 /* IslandTypes.swift */; };
 		2A59F933BA2093DF10E0D9CE /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E4F18AA940EFF7E047B9F7 /* AppState.swift */; };
@@ -251,6 +252,7 @@
 		E9726E0B419EA26D851AB24C /* RecapStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78FB882D49084DEA6A10DB4D /* RecapStore.swift */; };
 		EA45DC34E970BE5DE5DC9C56 /* WindowContextCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFA /* WindowContextCapture.swift */; };
 		EA45DC34E970BE5DE5DC9C57 /* SystemAutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFB /* SystemAutomationEngine.swift */; };
+		EA45DC34E970BE5DE5DC9C58 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91B733ADC638E14E9BB6EFC /* PermissionManager.swift */; };
 		EB7707FAA43E9387C05FD5F9 /* ServiceDetailRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6AAC67875F84A862BC2A9AF /* ServiceDetailRunner.swift */; };
 		ECC92B60F4F85D1A55BAB4E6 /* CalcomPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3104222B3F17BA5E8DEA5277 /* CalcomPoller.swift */; };
 		ECD5F8917F81BBC3B7844935 /* VoiceAssistantView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B88FCBF9F0FA89DE86997A /* VoiceAssistantView.swift */; };
@@ -412,6 +414,7 @@
 		E6AAC67875F84A862BC2A9AF /* ServiceDetailRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceDetailRunner.swift; sourceTree = "<group>"; };
 		E91B733ADC638E14E9BB6EFA /* WindowContextCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowContextCapture.swift; sourceTree = "<group>"; };
 		E91B733ADC638E14E9BB6EFB /* SystemAutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAutomationEngine.swift; sourceTree = "<group>"; };
+		E91B733ADC638E14E9BB6EFC /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		EBB84A66045EB20CAC93A8A6 /* AskQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskQuestion.swift; sourceTree = "<group>"; };
 		EE60A834934474CDAE022FF8 /* SearchAndSpotlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAndSpotlight.swift; sourceTree = "<group>"; };
 		F1064AD8471C51AFF4F12258 /* SharedSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSessions.swift; sourceTree = "<group>"; };
@@ -520,6 +523,7 @@
 				0E61F9B465179EDBB0631268 /* WidgetViews.swift */,
 				E91B733ADC638E14E9BB6EFA /* WindowContextCapture.swift */,
 				E91B733ADC638E14E9BB6EFB /* SystemAutomationEngine.swift */,
+				E91B733ADC638E14E9BB6EFC /* PermissionManager.swift */,
 				9207F9B32D9C7844F5332A31 /* PhoneLink */,
 			);
 			path = App;
@@ -906,6 +910,7 @@
 				5EAFDFCBD9C14173FF09EB45 /* WidgetViews.swift in Sources */,
 				2875610F701376BD65573386 /* WindowContextCapture.swift in Sources */,
 				2875610F701376BD65573387 /* SystemAutomationEngine.swift in Sources */,
+				2875610F701376BD65573388 /* PermissionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1098,6 +1103,7 @@
 				C292C423031955664FEA0532 /* WidgetViews.swift in Sources */,
 				EA45DC34E970BE5DE5DC9C56 /* WindowContextCapture.swift in Sources */,
 				EA45DC34E970BE5DE5DC9C57 /* SystemAutomationEngine.swift in Sources */,
+				EA45DC34E970BE5DE5DC9C58 /* PermissionManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

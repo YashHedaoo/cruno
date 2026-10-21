@@ -329,6 +329,46 @@ final class SystemAutomationEngine {
         }
     }
 
+    // MARK: - Action Summary Formatter (for Chat Visual Banners)
+
+    static func formatActionSummary(name: String, arguments: [String: Any]) -> String {
+        switch name {
+        case "open_url":
+            let url = arguments["url"] as? String ?? ""
+            return "Opened \(url)"
+        case "search_web_browser":
+            let q = arguments["query"] as? String ?? ""
+            let engine = (arguments["engine"] as? String ?? "Google").capitalized
+            return "Searched \(engine): \"\(q)\""
+        case "open_app":
+            let app = arguments["app_name"] as? String ?? ""
+            return "Activated \(app)"
+        case "quit_app":
+            let app = arguments["app_name"] as? String ?? ""
+            return "Quit \(app)"
+        case "manage_clipboard":
+            let action = arguments["action"] as? String ?? ""
+            return action == "set" ? "Copied text to clipboard" : "Read clipboard"
+        case "system_volume":
+            if let p = arguments["volume_percent"] as? Int {
+                return "Set system volume to \(p)%"
+            } else if let m = arguments["mute"] as? Bool {
+                return m ? "Muted system audio" : "Unmuted system audio"
+            }
+            return "Adjusted system volume"
+        case "finder_action":
+            let action = arguments["action"] as? String ?? ""
+            return action == "recent_downloads" ? "Checked recent downloads" : "Finder: \(action)"
+        case "run_shell_command":
+            let cmd = arguments["command"] as? String ?? ""
+            return "Executed command: \(cmd)"
+        case "run_applescript":
+            return "Executed AppleScript"
+        default:
+            return ""
+        }
+    }
+
     // MARK: - Browser & Chrome Actions
 
     func openURL(_ urlString: String, browser: String?) async -> String {

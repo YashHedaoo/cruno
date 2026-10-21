@@ -513,9 +513,11 @@ struct IslandHeader: View {
                     }
                     #endif
                 })
-                TabButton(icon: "waveform", view: .voice, state: state, preAction: {
-                    VoiceCoordinator.shared.activate()
-                })
+                if state.voiceEnabled {
+                    TabButton(icon: "waveform", view: .voice, state: state, preAction: {
+                        VoiceCoordinator.shared.activate()
+                    })
+                }
                 TabButton(icon: "plus", view: .upload, state: state)
             }
             .padding(.leading, 14)

@@ -74,7 +74,7 @@ struct DesktopBotView: View {
                         #endif
                     }()
                     engine.setDancing(dancing)
-                    engine.voiceLevel = CGFloat(appState.voiceAudioLevel)
+                    engine.voiceLevel = appState.voiceEnabled ? CGFloat(appState.voiceAudioLevel) : 0
                     engine.update(dt: dt)
 
                     var c = ctx
@@ -101,7 +101,7 @@ struct DesktopBotView: View {
                 }
             }
 
-            if appState.voicePhase != .idle {
+            if appState.voiceEnabled && appState.voicePhase != .idle {
                 DesktopMochiVoiceHaloView(appState: appState, outfit: appState.resolvedOutfit)
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             }

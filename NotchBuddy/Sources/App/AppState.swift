@@ -346,7 +346,7 @@ final class AppState: ObservableObject {
     @Published var voiceResponse: String = ""
     @Published var voiceTranscript: String = ""
     @Published var voiceAudioLevel: Float = 0
-    @Published var voiceEnabled: Bool = UserDefaults.standard.object(forKey: "voiceEnabled") as? Bool ?? true {
+    @Published var voiceEnabled: Bool = UserDefaults.standard.object(forKey: "voiceEnabled") as? Bool ?? false {
         didSet { UserDefaults.standard.set(voiceEnabled, forKey: "voiceEnabled") }
     }
 

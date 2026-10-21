@@ -21,7 +21,7 @@ struct BotCanvasView: View {
                 engine.lookX = lookX(state: state, size: size)
                 engine.lookY = lookY(state: state, size: size)
                 engine.particleOverhang = particleOverhang
-                engine.voiceLevel = CGFloat(state.voiceAudioLevel)
+                engine.voiceLevel = state.voiceEnabled ? CGFloat(state.voiceAudioLevel) : 0
                 // Widen slot when file is hovering over the mailbox (morph > 0.5)
                 // Open mouth (hover=0.20R) when file dragged over box; close when not
                 if engine.morph > 0.3 {

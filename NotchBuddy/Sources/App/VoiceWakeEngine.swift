@@ -102,6 +102,16 @@ final class VoiceWakeEngine: NSObject {
     // MARK: - Permissions + start
 
     nonisolated func requestPermissionsAndStart() {
+        DispatchQueue.main.async { [weak self] in
+            guard AppState.shared.voiceEnabled else {
+                self?.stop()
+                return
+            }
+            self?.performPermissionsAndStart()
+        }
+    }
+
+    private nonisolated func performPermissionsAndStart() {
         print("[Voice] Checking Speech & Microphone permissions...")
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             print("[Voice] Speech recognition authorization status: \(status.rawValue)")
@@ -113,6 +123,7 @@ final class VoiceWakeEngine: NSObject {
                 print("[Voice] Microphone access granted: \(granted)")
                 guard granted else { return }
                 DispatchQueue.main.async {
+                    guard AppState.shared.voiceEnabled else { return }
                     self?.isRunning = true
                     self?.startSlideWindow()
                 }

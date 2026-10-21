@@ -36,6 +36,8 @@ final class VoiceCoordinator {
         }
         if AppState.shared.voiceEnabled {
             wake.requestPermissionsAndStart()
+        } else {
+            wake.stop()
         }
     }
 
@@ -45,12 +47,14 @@ final class VoiceCoordinator {
             VoiceWakeEngine.shared.requestPermissionsAndStart()
         } else {
             VoiceWakeEngine.shared.stop()
+            dismiss()
         }
     }
 
     // MARK: - Activate manually (e.g. from Notch tab)
 
     func activate() {
+        guard AppState.shared.voiceEnabled else { return }
         cancelAutoClose()
         let s = AppState.shared
         s.voicePhase = .listening

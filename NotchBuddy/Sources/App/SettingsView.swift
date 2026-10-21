@@ -1147,6 +1147,45 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
         }
+
+        GroupBox("System & App Automation") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color(hex: "#22D3A0")).frame(width: 8, height: 8)
+                    Text("Mac System & Browser Control").font(.system(size: 12, weight: .semibold))
+                    Spacer()
+                    Text("Active")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.18))
+                        .foregroundColor(.green)
+                        .cornerRadius(4)
+                }
+
+                Text("Cruno can control Google Chrome, open URLs, search the web, read active tabs, launch/switch applications, read/write clipboard, and control system volume directly from your chat.")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    Button("Open Accessibility Settings") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Open Automation Settings") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.vertical, 4)
+        }
     }
 
     // MARK: - Integrations section

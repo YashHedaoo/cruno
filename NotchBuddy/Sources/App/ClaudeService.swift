@@ -259,14 +259,22 @@ final class ClaudeService {
     /// neutral otherwise — same wording as the Windows build.
     private nonisolated static func makeSystemPrompt() -> String {
         let opening = if let firstName = resolveUserFirstName() {
-            "You are Cruno, \(firstName)'s personal AI assistant embedded in the notch of their Mac."
+            "You are Cruno, \(firstName)'s personal AI companion and system assistant embedded in the notch of their Mac."
         } else {
-            "You are Cruno, a personal AI assistant embedded in the notch of the user's Mac."
+            "You are Cruno, a personal AI companion and system assistant embedded in the notch of the user's Mac."
         }
         return """
         \(opening) \
-        You have web search access and can help with absolutely anything — research, coding, finding places, recommendations, tasks, questions. \
-        Respond in the user's language. Be thorough and complete — use as much detail as the task requires. \
+        You have direct, full access to control this Mac via your system tools. You can:
+        - Control Google Chrome & browsers: open any URL, search Google/YouTube/GitHub, read active webpage contents, run JavaScript in the front tab, and list all open tabs.
+        - Launch, activate, list, or quit applications (Google Chrome, VS Code, Slack, Terminal, Spotify, Notes, Finder, etc.).
+        - Read and write to the system clipboard.
+        - Control system volume and mute.
+        - Open folders, reveal files, or view recent downloads in Finder.
+        - Run AppleScript and safe terminal shell commands.
+
+        Whenever the user asks you to do something on their system, open a webpage or app, find files, or check open tabs, invoke your system tools immediately to execute the action. After executing the tool, report the outcome cleanly and conversationally.
+        Respond in the user's language. Be thorough, friendly, and complete. \
         Use light Markdown when it helps: short paragraphs, bullet lists, **bold**, `inline code` and fenced code blocks. Avoid tables and big headings: the chat window is small.
         """
     }
@@ -314,16 +322,48 @@ final class ClaudeService {
 
         conversationMessages.append(["role": "user", "content": userContent])
 
+        let anthropicTools = webSearchTools + SystemAutomationEngine.anthropicToolDefinitions
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 4096,
-            "tools": webSearchTools,
+            "tools": anthropicTools,
             "system": systemPrompt,
             "messages": conversationMessages,
         ]
 
         do {
-            let data = try await callAPI(body: body, key: key, beta: "web-search-2025-03-05")
+            var currentBody = body
+            var data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
+            var loopCount = 0
+            while loopCount < 4 {
+                loopCount += 1
+                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let content = json["content"] as? [[String: Any]] else { break }
+
+                let toolUses = content.filter { ($0["type"] as? String) == "tool_use" }
+                if toolUses.isEmpty {
+                    await handleChatResult(data, state: state)
+                    return
+                }
+
+                conversationMessages.append(["role": "assistant", "content": content])
+
+                var toolResults: [[String: Any]] = []
+                for tu in toolUses {
+                    let toolId = tu["id"] as? String ?? ""
+                    let toolName = tu["name"] as? String ?? ""
+                    let toolInput = tu["input"] as? [String: Any] ?? [:]
+                    let result = await SystemAutomationEngine.shared.executeTool(name: toolName, arguments: toolInput)
+                    toolResults.append([
+                        "type": "tool_result",
+                        "tool_use_id": toolId,
+                        "content": result
+                    ])
+                }
+                conversationMessages.append(["role": "user", "content": toolResults])
+                currentBody["messages"] = conversationMessages
+                data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
+            }
             await handleChatResult(data, state: state)
         } catch {
             conversationMessages.removeLast()
@@ -417,9 +457,12 @@ final class ClaudeService {
             "max_tokens": 4096,
             "messages": msgs,
         ]
+        if !provider.isLocal {
+            body["tools"] = SystemAutomationEngine.openAIToolDefinitions
+        }
         if useStream { body["stream"] = true }
 
-        var req = URLRequest(url: url, timeoutInterval: useStream ? 120 : 30)
+        var req = URLRequest(url: url, timeoutInterval: useStream ? 120 : 45)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
@@ -486,28 +529,63 @@ final class ClaudeService {
                 await showError(error.localizedDescription, state: state)
             }
         } else {
-            // Non-streaming (Google, OpenAI)
+            // Non-streaming (Google, OpenAI, OpenRouter) with tool calling loop
             do {
-                let (data, response) = try await URLSession.shared.data(for: req)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let err = (json["error"] as? [String: Any])?["message"] as? String {
-                        throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: err])
+                var currentMsgs = msgs
+                var loopCount = 0
+                while loopCount < 5 {
+                    loopCount += 1
+                    body["messages"] = currentMsgs
+                    req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                    let (data, response) = try await URLSession.shared.data(for: req)
+                    guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let err = (json["error"] as? [String: Any])?["message"] as? String {
+                            throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: err])
+                        }
+                        throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"])
                     }
-                    throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)"])
+                    guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                          let choices = json["choices"] as? [[String: Any]],
+                          let message = choices.first?["message"] as? [String: Any] else {
+                        throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unexpected response format"])
+                    }
+
+                    // Check for tool calls
+                    if let toolCalls = message["tool_calls"] as? [[String: Any]], !toolCalls.isEmpty {
+                        currentMsgs.append(message)
+                        conversationMessages.append(message)
+
+                        for tc in toolCalls {
+                            let callId = tc["id"] as? String ?? UUID().uuidString
+                            let fn = tc["function"] as? [String: Any] ?? [:]
+                            let fnName = fn["name"] as? String ?? ""
+                            let argsStr = fn["arguments"] as? String ?? "{}"
+                            let args = (try? JSONSerialization.jsonObject(with: Data(argsStr.utf8))) as? [String: Any] ?? [:]
+
+                            let output = await SystemAutomationEngine.shared.executeTool(name: fnName, arguments: args)
+
+                            let toolMsg: [String: Any] = [
+                                "role": "tool",
+                                "tool_call_id": callId,
+                                "content": output
+                            ]
+                            currentMsgs.append(toolMsg)
+                            conversationMessages.append(toolMsg)
+                        }
+                        continue
+                    }
+
+                    let content = (message["content"] as? String) ?? ""
+                    let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    conversationMessages.append(["role": "assistant", "content": trimmed])
+                    state.chatHistory.append(ChatMessage(role: .assistant, content: trimmed))
+                    state.stateOverride = nil
+                    state.view = .prompt
+                    NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
+                    break
                 }
-                guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let choices = json["choices"] as? [[String: Any]],
-                      let message = choices.first?["message"] as? [String: Any],
-                      let content = message["content"] as? String else {
-                    throw NSError(domain: "ChatAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unexpected response format"])
-                }
-                let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                conversationMessages.append(["role": "assistant", "content": trimmed])
-                state.chatHistory.append(ChatMessage(role: .assistant, content: trimmed))
-                state.stateOverride = nil
-                state.view = .prompt
-                NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
             } catch {
                 conversationMessages.removeLast()
                 await showError(error.localizedDescription, state: state)

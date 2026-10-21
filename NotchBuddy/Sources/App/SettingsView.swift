@@ -1055,13 +1055,16 @@ struct SettingsView: View {
 
                 HStack(spacing: 8) {
                     Circle().fill(Color(hex: "#4ADE80")).frame(width: 8, height: 8)
-                    Text("OpenCode").font(.system(size: 12, weight: .semibold))
+                    Text("OpenRouter / OpenCode").font(.system(size: 12, weight: .semibold))
                 }
-                SecureField("OpenCode API key", text: $openCodeKey)
+                SecureField("OpenRouter API key (sk-or-v1-...)", text: $openCodeKey)
                     .textFieldStyle(.roundedBorder)
+                Text("Supports DeepSeek, Claude, GPT-4o, Llama, and more via openrouter.ai")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
                 Button(String(localized: "Save")) {
                     KeychainStore.shared.set("opencode-api-key", value: openCodeKey)
-                    statusMessage = "OpenCode API key saved."
+                    statusMessage = "OpenRouter API key saved."
                 }
                 .buttonStyle(.borderedProminent)
             }

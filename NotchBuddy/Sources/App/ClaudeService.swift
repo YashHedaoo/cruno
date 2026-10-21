@@ -176,33 +176,64 @@ final class ClaudeService {
             .map { (id: $0.id, label: $0.id) }
     }
 
-    /// Fetches chat models from OpenCode API.
+    /// Fetches chat models from OpenRouter API.
     static func fetchOpenCodeModels(apiKey: String) async -> [(id: String, label: String)] {
-        guard let url = URL(string: "https://api.opencode.ai/v1/models") else { return [] }
-        var req = URLRequest(url: url, timeoutInterval: 10)
+        guard let url = URL(string: "https://openrouter.ai/api/v1/models") else { return [] }
+        var req = URLRequest(url: url, timeoutInterval: 12)
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("https://cruno.app", forHTTPHeaderField: "HTTP-Referer")
+        req.setValue("Cruno", forHTTPHeaderField: "X-Title")
+
+        let fallbacks: [(id: String, label: String)] = [
+            (id: "deepseek/deepseek-chat", label: "DeepSeek V3"),
+            (id: "deepseek/deepseek-r1", label: "DeepSeek R1"),
+            (id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet"),
+            (id: "openai/gpt-4o", label: "GPT-4o"),
+            (id: "openai/gpt-4o-mini", label: "GPT-4o mini"),
+            (id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash"),
+            (id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B"),
+            (id: "qwen/qwen-2.5-coder-32b-instruct", label: "Qwen 2.5 Coder 32B")
+        ]
+
         guard let (data, response) = try? await URLSession.shared.data(for: req),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = json["data"] as? [[String: Any]] else {
-            // Fallback list of common OpenCode models if list endpoint is unavailable
-            return [
-                (id: "opencode/default", label: "OpenCode Default"),
-                (id: "opencode/claude-3-5-sonnet", label: "OpenCode Claude 3.5 Sonnet"),
-                (id: "opencode/gpt-4o", label: "OpenCode GPT-4o"),
-                (id: "opencode/deepseek-coder", label: "OpenCode DeepSeek Coder")
-            ]
+            return fallbacks
         }
-        let list = items.compactMap { item -> (id: String, label: String)? in
+
+        let popularPrefixes = [
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-r1",
+            "anthropic/claude-3.5-sonnet",
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
+            "google/gemini-2.0-flash",
+            "meta-llama/llama-3.3-70b",
+            "qwen/qwen-2.5-coder"
+        ]
+
+        let parsed = items.compactMap { item -> (id: String, label: String)? in
             guard let id = item["id"] as? String else { return nil }
-            return (id: id, label: id)
+            let lower = id.lowercased()
+            if lower.contains("embed") || lower.contains("moderation") || lower.contains("whisper") {
+                return nil
+            }
+            let name = (item["name"] as? String) ?? id
+            return (id: id, label: name)
         }
-        return list.isEmpty ? [
-            (id: "opencode/default", label: "OpenCode Default"),
-            (id: "opencode/claude-3-5-sonnet", label: "OpenCode Claude 3.5 Sonnet"),
-            (id: "opencode/gpt-4o", label: "OpenCode GPT-4o"),
-            (id: "opencode/deepseek-coder", label: "OpenCode DeepSeek Coder")
-        ] : list
+
+        var top: [(id: String, label: String)] = []
+        var others: [(id: String, label: String)] = []
+        for model in parsed {
+            if popularPrefixes.contains(where: { model.id.lowercased().hasPrefix($0) }) {
+                top.append(model)
+            } else {
+                others.append(model)
+            }
+        }
+        let combined = top + others
+        return combined.isEmpty ? fallbacks : combined
     }
 
     /// Chosen in Settings; falls back to the default when the field is left empty.
@@ -315,7 +346,7 @@ final class ClaudeService {
             switch provider {
             case .google:    baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
             case .openai:    baseURL = "https://api.openai.com/v1"
-            case .opencode:  baseURL = "https://api.opencode.ai/v1"
+            case .opencode:  baseURL = "https://openrouter.ai/api/v1"
             case .anthropic, .ollama, .lmstudio: baseURL = ""
             }
         }
@@ -392,6 +423,10 @@ final class ClaudeService {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        if provider == .opencode {
+            req.setValue("https://cruno.app", forHTTPHeaderField: "HTTP-Referer")
+            req.setValue("Cruno", forHTTPHeaderField: "X-Title")
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         if useStream {

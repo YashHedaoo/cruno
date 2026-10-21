@@ -199,7 +199,7 @@ final class VoiceCoordinator {
         switch provider {
         case .google:   baseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
         case .openai:   baseURL = "https://api.openai.com/v1"
-        case .opencode: baseURL = "https://api.opencode.ai/v1"
+        case .opencode: baseURL = "https://openrouter.ai/api/v1"
         case .ollama:   baseURL = LocalChat.normaliseURL(s.ollamaServerURL)
         case .lmstudio: baseURL = LocalChat.normaliseURL(s.lmstudioServerURL)
         case .anthropic: return
@@ -235,6 +235,10 @@ final class VoiceCoordinator {
         req.httpBody = data
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
+        if provider == .opencode {
+            req.setValue("https://cruno.app", forHTTPHeaderField: "HTTP-Referer")
+            req.setValue("Cruno", forHTTPHeaderField: "X-Title")
+        }
 
         await streamOpenAISSE(request: req)
     }

@@ -221,7 +221,7 @@ final class AppState: ObservableObject {
         case .anthropic: return claudeModel
         case .google:    return googleChatModel
         case .openai:    return openAIChatModel
-        case .opencode:  return openCodeChatModel
+        case .opencode:  return (openCodeChatModel.isEmpty || openCodeChatModel == "opencode/default") ? ChatProvider.opencode.defaultModel : openCodeChatModel
         case .ollama:    return ollamaChatModel
         case .lmstudio:  return lmstudioChatModel
         }
@@ -471,7 +471,7 @@ final class AppState: ObservableObject {
         if let v = ud.string(forKey: "chatProvider"), let p = ChatProvider(rawValue: v) { chatProvider = p }
         if let v = ud.string(forKey: "googleChatModel"), !v.isEmpty { googleChatModel = v }
         if let v = ud.string(forKey: "openAIChatModel"), !v.isEmpty { openAIChatModel = v }
-        if let v = ud.string(forKey: "openCodeChatModel"), !v.isEmpty { openCodeChatModel = v }
+        if let v = ud.string(forKey: "openCodeChatModel"), !v.isEmpty, v != "opencode/default" { openCodeChatModel = v }
         if let v = ud.string(forKey: "ollamaChatModel"), !v.isEmpty { ollamaChatModel = v }
         if let v = ud.string(forKey: "lmstudioChatModel"), !v.isEmpty { lmstudioChatModel = v }
         if let v = ud.string(forKey: "ollamaServerURL"), !v.isEmpty { ollamaServerURL = v }

@@ -85,7 +85,7 @@ enum ChatProvider: String, CaseIterable, Codable {
         case .anthropic: "Anthropic"
         case .google:    "Google"
         case .openai:    "OpenAI"
-        case .opencode:  "OpenCode"
+        case .opencode:  "OpenRouter"
         case .ollama:    "Ollama"
         case .lmstudio:  "LM Studio"
         }
@@ -107,7 +107,7 @@ enum ChatProvider: String, CaseIterable, Codable {
         case .anthropic: "claude-sonnet-4-6"
         case .google:    "gemini-2.0-flash"
         case .openai:    "gpt-4o"
-        case .opencode:  "opencode/default"
+        case .opencode:  "deepseek/deepseek-chat"
         case .ollama:    "llama3.2"
         case .lmstudio:  "local-model"
         }

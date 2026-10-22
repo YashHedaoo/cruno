@@ -135,6 +135,9 @@
     "$" : {
 
     },
+    "Accessibility API" : {
+
+    },
     "Active" : {
 
     },
@@ -1038,6 +1041,9 @@
         }
       }
     },
+    "Authorized" : {
+
+    },
     "AUTO" : {
       "localizations" : {
         "ar" : {
@@ -1229,6 +1235,9 @@
           }
         }
       }
+    },
+    "Available" : {
+
     },
     "Bahasa Indonesia" : {
 
@@ -4801,6 +4810,12 @@
           }
         }
       }
+    },
+    "Google Chrome Automation" : {
+
+    },
+    "Granted" : {
+
     },
     "Hide after" : {
       "localizations" : {
@@ -13061,6 +13076,9 @@
         }
       }
     },
+    "Run Diagnostics Self-Test" : {
+
+    },
     "s inactive" : {
       "localizations" : {
         "ar" : {
@@ -13319,6 +13337,9 @@
           }
         }
       }
+    },
+    "Screen Capture (Vision Ready)" : {
+
     },
     "Screen with the notch" : {
 

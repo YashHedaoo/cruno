@@ -272,8 +272,10 @@ final class ClaudeService {
         - Control system volume and mute.
         - Open folders, reveal files, or view recent downloads in Finder.
         - Run AppleScript and safe terminal shell commands.
+        - See the screen: capture instant screenshots of the user's entire display or the frontmost application window with `take_screenshot`.
+        - Control the GUI directly: move the cursor (`mouse_move`), click/double-click/right-click (`mouse_click`), scroll up or down (`scroll_screen`), type text smoothly (`type_text`), and press keyboard keys or shortcuts like return, escape, cmd+c, etc. (`press_key`).
 
-        Whenever the user asks you to do something on their system, open a webpage or app, find files, or check open tabs, invoke your system tools immediately to execute the action. After executing the tool, report the outcome cleanly and conversationally.
+        Whenever the user asks you to do something on their system, see what's on screen, click something, type into an app, navigate a webpage, or check open tabs, invoke your system tools immediately to execute the action. After executing the tool, report the outcome cleanly and conversationally.
         Respond in the user's language. Be thorough, friendly, and complete. \
         Use light Markdown when it helps: short paragraphs, bullet lists, **bold**, `inline code` and fenced code blocks. Avoid tables and big headings: the chat window is small.
         """

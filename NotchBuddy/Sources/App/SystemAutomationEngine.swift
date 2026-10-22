@@ -243,6 +243,128 @@ final class SystemAutomationEngine {
                     "required": ["command"]
                 ]
             ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "take_screenshot",
+                "description": "Takes a screenshot of the user's screen or the frontmost application window to visually inspect UI, errors, or elements.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "target": [
+                            "type": "string",
+                            "description": "'screen' for entire main display, or 'window' for active frontmost app window (default: 'screen')"
+                        ]
+                    ]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "mouse_click",
+                "description": "Moves mouse cursor to pixel coordinates and clicks. Use this to click buttons, input fields, links, or UI elements on screen.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "x": [
+                            "type": "number",
+                            "description": "X coordinate in screen pixels"
+                        ],
+                        "y": [
+                            "type": "number",
+                            "description": "Y coordinate in screen pixels"
+                        ],
+                        "button": [
+                            "type": "string",
+                            "description": "'left' (default), 'right', or 'double'"
+                        ]
+                    ],
+                    "required": ["x", "y"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "mouse_move",
+                "description": "Moves the mouse cursor to a specific screen coordinate without clicking.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "x": [
+                            "type": "number",
+                            "description": "X coordinate in screen pixels"
+                        ],
+                        "y": [
+                            "type": "number",
+                            "description": "Y coordinate in screen pixels"
+                        ]
+                    ],
+                    "required": ["x", "y"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "type_text",
+                "description": "Types text directly into the currently focused input field or text area on the user's Mac.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "text": [
+                            "type": "string",
+                            "description": "The exact text to type"
+                        ]
+                    ],
+                    "required": ["text"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "press_key",
+                "description": "Presses a keyboard key or hotkey (e.g. Return, Tab, Escape, Backspace, Space, or shortcuts like Cmd+C, Cmd+V).",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "key": [
+                            "type": "string",
+                            "description": "The key name: 'return', 'tab', 'escape', 'space', 'delete', 'up', 'down', 'left', 'right', 'c', 'v', 'a', etc."
+                        ],
+                        "modifiers": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "description": "Optional modifiers: ['cmd'], ['shift'], ['alt'], ['ctrl']"
+                        ]
+                    ],
+                    "required": ["key"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "scroll_screen",
+                "description": "Scrolls the active window up or down.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "direction": [
+                            "type": "string",
+                            "description": "'up' or 'down'"
+                        ],
+                        "amount": [
+                            "type": "integer",
+                            "description": "Number of scroll lines (default: 5)"
+                        ]
+                    ],
+                    "required": ["direction"]
+                ]
+            ]
         ]
     ]
 
@@ -324,6 +446,44 @@ final class SystemAutomationEngine {
             let command = arguments["command"] as? String ?? ""
             return await runShell(command: command)
 
+        case "take_screenshot":
+            let target = arguments["target"] as? String ?? "screen"
+            let capture = target == "window"
+                ? await ScreenCaptureEngine.shared.captureFrontmostWindow()
+                : await ScreenCaptureEngine.shared.captureMainScreen()
+            if let cap = capture {
+                return "Screenshot captured successfully (\(Int(cap.image.size.width))x\(Int(cap.image.size.height))). Image base64 data length: \(cap.base64.count) chars."
+            } else {
+                return "Failed to capture screenshot. Check Screen Recording permissions in System Settings."
+            }
+
+        case "mouse_click":
+            let x = CGFloat(arguments["x"] as? Double ?? Double(arguments["x"] as? Int ?? 0))
+            let y = CGFloat(arguments["y"] as? Double ?? Double(arguments["y"] as? Int ?? 0))
+            let btn = arguments["button"] as? String ?? "left"
+            let count = btn == "double" ? 2 : 1
+            let buttonName = btn == "double" ? "left" : btn
+            return MouseKeyboardSimulator.shared.click(at: CGPoint(x: x, y: y), button: buttonName, count: count)
+
+        case "mouse_move":
+            let x = CGFloat(arguments["x"] as? Double ?? Double(arguments["x"] as? Int ?? 0))
+            let y = CGFloat(arguments["y"] as? Double ?? Double(arguments["y"] as? Int ?? 0))
+            return MouseKeyboardSimulator.shared.move(to: CGPoint(x: x, y: y))
+
+        case "type_text":
+            let text = arguments["text"] as? String ?? ""
+            return MouseKeyboardSimulator.shared.typeText(text)
+
+        case "press_key":
+            let key = arguments["key"] as? String ?? "return"
+            let mods = arguments["modifiers"] as? [String] ?? []
+            return MouseKeyboardSimulator.shared.pressKey(key: key, modifiers: mods)
+
+        case "scroll_screen":
+            let dir = arguments["direction"] as? String ?? "down"
+            let amt = arguments["amount"] as? Int ?? 5
+            return MouseKeyboardSimulator.shared.scroll(direction: dir, amount: amt)
+
         default:
             return "Unknown tool: \(name)"
         }
@@ -364,6 +524,30 @@ final class SystemAutomationEngine {
             return "Executed command: \(cmd)"
         case "run_applescript":
             return "Executed AppleScript"
+        case "take_screenshot":
+            let target = arguments["target"] as? String ?? "screen"
+            return "Captured \(target) screenshot"
+        case "mouse_click":
+            let x = Int(arguments["x"] as? Double ?? Double(arguments["x"] as? Int ?? 0))
+            let y = Int(arguments["y"] as? Double ?? Double(arguments["y"] as? Int ?? 0))
+            let btn = arguments["button"] as? String ?? "click"
+            return "Mouse \(btn) at (\(x), \(y))"
+        case "mouse_move":
+            let x = Int(arguments["x"] as? Double ?? Double(arguments["x"] as? Int ?? 0))
+            let y = Int(arguments["y"] as? Double ?? Double(arguments["y"] as? Int ?? 0))
+            return "Moved mouse to (\(x), \(y))"
+        case "type_text":
+            let t = arguments["text"] as? String ?? ""
+            let trunc = t.count > 25 ? String(t.prefix(25)) + "…" : t
+            return "Typed \"\(trunc)\""
+        case "press_key":
+            let k = arguments["key"] as? String ?? ""
+            let mods = arguments["modifiers"] as? [String] ?? []
+            let modStr = mods.isEmpty ? "" : mods.joined(separator: "+") + "+"
+            return "Key: \(modStr)\(k.capitalized)"
+        case "scroll_screen":
+            let dir = arguments["direction"] as? String ?? "down"
+            return "Scrolled \(dir)"
         default:
             return ""
         }

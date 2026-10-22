@@ -842,4 +842,5 @@ struct ChatMessage: Identifiable, Equatable {
     let id = UUID()
     let role: ChatRole
     var content: String   // var for streaming updates
+    var sources: [WebSourceCitation] = []
 }

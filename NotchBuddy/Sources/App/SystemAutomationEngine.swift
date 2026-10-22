@@ -365,6 +365,76 @@ final class SystemAutomationEngine {
                     "required": ["direction"]
                 ]
             ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "deep_web_search",
+                "description": "Performs an in-depth web search with authoritative source citations, extracting live web snippets and facts without opening a browser.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "query": [
+                            "type": "string",
+                            "description": "The search query (e.g. latest news, documentation, facts, current events)"
+                        ],
+                        "max_results": [
+                            "type": "integer",
+                            "description": "Maximum number of source results (default: 4)"
+                        ]
+                    ],
+                    "required": ["query"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "search_local_files",
+                "description": "Searches for files and documents on the Mac instantly using Spotlight metadata (searches file names and full text contents).",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "query": [
+                            "type": "string",
+                            "description": "Keywords, filenames, or content to search for"
+                        ],
+                        "folder": [
+                            "type": "string",
+                            "description": "Optional search folder: 'Downloads', 'Documents', 'Desktop', or directory path"
+                        ]
+                    ],
+                    "required": ["query"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "read_local_file",
+                "description": "Reads and extracts text from any file on the Mac (supports code, text, Markdown, JSON, YAML, and PDF documents).",
+                "parameters": [
+                    "type": "object",
+                    "properties": [
+                        "path": [
+                            "type": "string",
+                            "description": "The absolute or tilde path to the file (e.g. ~/Downloads/report.pdf, ~/Desktop/notes.txt)"
+                        ]
+                    ],
+                    "required": ["path"]
+                ]
+            ]
+        ],
+        [
+            "type": "function",
+            "function": [
+                "name": "get_clipboard",
+                "description": "Reads the current contents and recent history of the macOS system clipboard.",
+                "parameters": [
+                    "type": "object",
+                    "properties": [:]
+                ]
+            ]
         ]
     ]
 
@@ -484,6 +554,30 @@ final class SystemAutomationEngine {
             let amt = arguments["amount"] as? Int ?? 5
             return MouseKeyboardSimulator.shared.scroll(direction: dir, amount: amt)
 
+        case "deep_web_search":
+            let query = arguments["query"] as? String ?? ""
+            let maxResults = arguments["max_results"] as? Int ?? 4
+            let result = await WebResearchEngine.shared.search(query: query, maxResults: maxResults)
+            return result.summaryText
+
+        case "search_local_files":
+            let query = arguments["query"] as? String ?? ""
+            let folder = arguments["folder"] as? String
+            let items = await LocalFileSearchEngine.shared.searchFiles(query: query, scope: folder)
+            if items.isEmpty { return "No matching files found for '\(query)'." }
+            var out = "Found \(items.count) matching file(s):\n"
+            for (idx, it) in items.enumerated() {
+                out += "[\(idx + 1)] \(it.name) (\(it.formattedSize)) - \(it.path)\n"
+            }
+            return out
+
+        case "read_local_file":
+            let path = arguments["path"] as? String ?? ""
+            return await LocalFileSearchEngine.shared.readFileContent(path: path)
+
+        case "get_clipboard":
+            return LocalFileSearchEngine.shared.getClipboardContent()
+
         default:
             return "Unknown tool: \(name)"
         }
@@ -548,6 +642,18 @@ final class SystemAutomationEngine {
         case "scroll_screen":
             let dir = arguments["direction"] as? String ?? "down"
             return "Scrolled \(dir)"
+        case "deep_web_search":
+            let q = arguments["query"] as? String ?? ""
+            return "Researched web: \"\(q)\""
+        case "search_local_files":
+            let q = arguments["query"] as? String ?? ""
+            return "Searched files: \"\(q)\""
+        case "read_local_file":
+            let p = arguments["path"] as? String ?? ""
+            let name = (p as NSString).lastPathComponent
+            return "Read \(name)"
+        case "get_clipboard":
+            return "Read clipboard"
         default:
             return ""
         }

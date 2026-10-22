@@ -274,8 +274,10 @@ final class ClaudeService {
         - Run AppleScript and safe terminal shell commands.
         - See the screen: capture instant screenshots of the user's entire display or the frontmost application window with `take_screenshot`.
         - Control the GUI directly: move the cursor (`mouse_move`), click/double-click/right-click (`mouse_click`), scroll up or down (`scroll_screen`), type text smoothly (`type_text`), and press keyboard keys or shortcuts like return, escape, cmd+c, etc. (`press_key`).
+        - Deep Web Research: perform in-depth web searches with real-time facts and authoritative citations via `deep_web_search`.
+        - Local Mac Files & Documents: search files across the Mac with Spotlight via `search_local_files`, read files and PDFs via `read_local_file`, and inspect clipboard via `get_clipboard`.
 
-        Whenever the user asks you to do something on their system, see what's on screen, click something, type into an app, navigate a webpage, or check open tabs, invoke your system tools immediately to execute the action. After executing the tool, report the outcome cleanly and conversationally.
+        Whenever the user asks you to do something on their system, research a topic, find a file, see what's on screen, click something, type into an app, navigate a webpage, or check open tabs, invoke your system tools immediately to execute the action. After executing the tool, report the outcome cleanly and conversationally.
         Respond in the user's language. Be thorough, friendly, and complete. \
         Use light Markdown when it helps: short paragraphs, bullet lists, **bold**, `inline code` and fenced code blocks. Avoid tables and big headings: the chat window is small.
         """
@@ -530,7 +532,10 @@ final class ClaudeService {
                             lower.contains("take a screenshot") || lower.contains("capture screen") ||
                             lower.contains("see my screen") || lower.contains("browser tab") ||
                             lower.contains("chrome tab") || lower.contains("mute") ||
-                            lower.contains("set volume") || lower.contains("finder")
+                            lower.contains("set volume") || lower.contains("finder") ||
+                            lower.contains("find file") || lower.contains("search file") ||
+                            lower.contains("read file") || lower.contains("clipboard") ||
+                            lower.contains("deep search") || lower.contains("research")
 
         // Pure reasoning models (DeepSeek R1) and all standard conversational queries use fast SSE streaming.
         // Action-oriented queries on non-reasoning models use the tool-calling loop.
@@ -720,7 +725,8 @@ final class ClaudeService {
                         finalDisplay = banner + "\n\n" + finalDisplay
                     }
                     conversationMessages.append(["role": "assistant", "content": finalDisplay])
-                    state.chatHistory.append(ChatMessage(role: .assistant, content: finalDisplay))
+                    let sources = WebResearchEngine.shared.lastSources
+                    state.chatHistory.append(ChatMessage(role: .assistant, content: finalDisplay, sources: sources))
                     state.stateOverride = nil
                     state.view = .prompt
                     NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
@@ -847,7 +853,8 @@ final class ClaudeService {
         }
 
         // Add to display history
-        state.chatHistory.append(ChatMessage(role: .assistant, content: displayText))
+        let sources = WebResearchEngine.shared.lastSources
+        state.chatHistory.append(ChatMessage(role: .assistant, content: displayText, sources: sources))
 
         state.stateOverride = nil
         state.view = .prompt

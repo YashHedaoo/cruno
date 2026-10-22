@@ -1570,7 +1570,45 @@ struct ChatBubble: View {
                         .background(Color.white.opacity(0.13))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
-                    ChatMarkdownView(markdown: message.content)
+                    VStack(alignment: .leading, spacing: 6) {
+                        if !message.sources.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(Array(message.sources.enumerated()), id: \.offset) { idx, source in
+                                        Button {
+                                            if let url = URL(string: source.url) {
+                                                NSWorkspace.shared.open(url)
+                                            }
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Text("\(idx + 1)")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundColor(Color(hex: "#60A5FA"))
+                                                    .frame(width: 14, height: 14)
+                                                    .background(Color(hex: "#60A5FA").opacity(0.15))
+                                                    .clipShape(Circle())
+                                                Text(source.domain)
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundColor(Color(hex: "#E2E8F0"))
+                                                    .lineLimit(1)
+                                                Image(systemName: "arrow.up.right")
+                                                    .font(.system(size: 7.5))
+                                                    .foregroundColor(Color(hex: "#94A3B8"))
+                                            }
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 3.5)
+                                            .background(Color.white.opacity(0.08))
+                                            .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(source.title)
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 2)
+                        }
+                        ChatMarkdownView(markdown: message.content)
+                    }
                     Spacer(minLength: 8)
                 }
             }

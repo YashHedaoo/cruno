@@ -362,6 +362,12 @@ final class AppState: ObservableObject {
     // Chat conversation history
     @Published var chatHistory: [ChatMessage] = []
 
+    /// True while an AI provider (Claude, OpenAI, Gemini, Local) is actively generating, searching, or streaming.
+    @Published var isChatGenerating: Bool = false
+
+    /// Live activity description displayed during search or processing (e.g. "Searching the web…", "Thinking…").
+    @Published var chatActivityStatus: String? = nil
+
     // Pending approval request from Claude Code hook
     @Published var pendingApproval: ApprovalInfo? = nil
 

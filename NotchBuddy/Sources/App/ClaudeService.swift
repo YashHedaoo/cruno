@@ -285,6 +285,42 @@ final class ClaudeService {
         ["type": "web_search_20250305", "name": "web_search", "max_uses": 5]
     ]
 
+    // MARK: - Chat Lifecycle & Task Cancellation
+
+    private var currentChatTask: Task<Void, Never>?
+
+    /// Starts a chat turn in a tracked Task that can be stopped at any time.
+    func startChat(query: String, context: PromptContext?, state: AppState) {
+        currentChatTask?.cancel()
+        currentChatTask = Task { @MainActor [weak self, weak state] in
+            guard let self = self, let state = state else { return }
+            state.isChatGenerating = true
+            state.stateOverride = .thinking
+            state.chatActivityStatus = String(localized: "Thinking…")
+            defer {
+                state.isChatGenerating = false
+                state.chatActivityStatus = nil
+                state.stateOverride = nil
+                self.currentChatTask = nil
+            }
+            await self.chat(query: query, context: context, state: state)
+        }
+    }
+
+    /// Immediately stops the active search, reasoning, or streaming response.
+    func stopChat(state: AppState) {
+        currentChatTask?.cancel()
+        currentChatTask = nil
+        state.isChatGenerating = false
+        state.chatActivityStatus = nil
+        state.stateOverride = nil
+
+        // If the last message is an empty placeholder, remove it
+        if let last = state.chatHistory.last, last.role == .assistant && last.content.isEmpty {
+            state.chatHistory.removeLast()
+        }
+    }
+
     // MARK: - Chat (multi-turn, natural text + web search)
 
     func chat(query: String, context: PromptContext?, state: AppState) async {
@@ -334,11 +370,13 @@ final class ClaudeService {
         ]
 
         do {
+            guard !Task.isCancelled else { return }
             var currentBody = body
             var data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
             var loopCount = 0
             var executedActionSummaries: [String] = []
             while loopCount < 4 {
+                guard !Task.isCancelled else { return }
                 loopCount += 1
                 guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let content = json["content"] as? [[String: Any]] else { break }
@@ -351,8 +389,23 @@ final class ClaudeService {
 
                 conversationMessages.append(["role": "assistant", "content": content])
 
+                // Update activity status for active tools
+                let toolNames = toolUses.compactMap { $0["name"] as? String }
+                if toolNames.contains(where: { $0.contains("search") }) {
+                    state.chatActivityStatus = String(localized: "Searching the web…")
+                } else if toolNames.contains(where: { $0.contains("screenshot") }) {
+                    state.chatActivityStatus = String(localized: "Viewing screen…")
+                } else if toolNames.contains(where: { $0.contains("browser") || $0.contains("chrome") }) {
+                    state.chatActivityStatus = String(localized: "Checking browser…")
+                } else if toolNames.contains(where: { $0.contains("click") || $0.contains("type") || $0.contains("key") || $0.contains("mouse") }) {
+                    state.chatActivityStatus = String(localized: "Controlling system…")
+                } else if let first = toolNames.first {
+                    state.chatActivityStatus = String(localized: "Running \(first)…")
+                }
+
                 var toolResults: [[String: Any]] = []
                 for tu in toolUses {
+                    guard !Task.isCancelled else { return }
                     let toolId = tu["id"] as? String ?? ""
                     let toolName = tu["name"] as? String ?? ""
                     let toolInput = tu["input"] as? [String: Any] ?? [:]
@@ -367,14 +420,21 @@ final class ClaudeService {
                         "content": result
                     ])
                 }
+                guard !Task.isCancelled else { return }
                 conversationMessages.append(["role": "user", "content": toolResults])
                 currentBody["messages"] = conversationMessages
+                state.chatActivityStatus = String(localized: "Thinking…")
                 data = try await callAPI(body: currentBody, key: key, beta: "web-search-2025-03-05")
             }
+            guard !Task.isCancelled else { return }
             await handleChatResult(data, state: state, actionSummaries: executedActionSummaries)
+        } catch is CancellationError {
+            return
         } catch {
-            conversationMessages.removeLast()
-            await showError(error.localizedDescription, state: state)
+            if !Task.isCancelled {
+                conversationMessages.removeLast()
+                await showError(error.localizedDescription, state: state)
+            }
         }
     }
 
@@ -513,27 +573,33 @@ final class ClaudeService {
                 state.stateOverride = nil
                 state.view = .prompt
                 NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
+            } catch is CancellationError {
+                return
             } catch let e as LocalChatError {
-                conversationMessages.removeLast()
-                state.chatHistory.removeAll { $0.id == msgId }
-                state.stateOverride = nil
-                let msg: String
-                switch e {
-                case .serverUnreachable:
-                    msg = provider == .ollama
-                        ? "Ollama isn't running. Open it, then ask again."
-                        : "Start the local server in LM Studio, then ask again."
-                case .modelNotFound(let m):
-                    msg = "\(m) isn't installed. Pick another model above the chat box."
-                case .serverError(let s):
-                    msg = s
+                if !Task.isCancelled {
+                    conversationMessages.removeLast()
+                    state.chatHistory.removeAll { $0.id == msgId }
+                    state.stateOverride = nil
+                    let msg: String
+                    switch e {
+                    case .serverUnreachable:
+                        msg = provider == .ollama
+                            ? "Ollama isn't running. Open it, then ask again."
+                            : "Start the local server in LM Studio, then ask again."
+                    case .modelNotFound(let m):
+                        msg = "\(m) isn't installed. Pick another model above the chat box."
+                    case .serverError(let s):
+                        msg = s
+                    }
+                    await showError(msg, state: state)
                 }
-                await showError(msg, state: state)
             } catch {
-                conversationMessages.removeLast()
-                state.chatHistory.removeAll { $0.id == msgId }
-                state.stateOverride = nil
-                await showError(error.localizedDescription, state: state)
+                if !Task.isCancelled {
+                    conversationMessages.removeLast()
+                    state.chatHistory.removeAll { $0.id == msgId }
+                    state.stateOverride = nil
+                    await showError(error.localizedDescription, state: state)
+                }
             }
         } else {
             // Non-streaming (Google, OpenAI, OpenRouter) with tool calling loop
@@ -542,6 +608,7 @@ final class ClaudeService {
                 var loopCount = 0
                 var executedActionSummaries: [String] = []
                 while loopCount < 5 {
+                    guard !Task.isCancelled else { return }
                     loopCount += 1
                     body["messages"] = currentMsgs
                     req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -565,7 +632,22 @@ final class ClaudeService {
                         currentMsgs.append(message)
                         conversationMessages.append(message)
 
+                        // Update live activity status
+                        let fnNames = toolCalls.compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
+                        if fnNames.contains(where: { $0.contains("search") }) {
+                            state.chatActivityStatus = String(localized: "Searching the web…")
+                        } else if fnNames.contains(where: { $0.contains("screenshot") }) {
+                            state.chatActivityStatus = String(localized: "Viewing screen…")
+                        } else if fnNames.contains(where: { $0.contains("browser") || $0.contains("chrome") }) {
+                            state.chatActivityStatus = String(localized: "Checking browser…")
+                        } else if fnNames.contains(where: { $0.contains("click") || $0.contains("type") || $0.contains("key") || $0.contains("mouse") }) {
+                            state.chatActivityStatus = String(localized: "Controlling system…")
+                        } else if let first = fnNames.first {
+                            state.chatActivityStatus = String(localized: "Running \(first)…")
+                        }
+
                         for tc in toolCalls {
+                            guard !Task.isCancelled else { return }
                             let callId = tc["id"] as? String ?? UUID().uuidString
                             let fn = tc["function"] as? [String: Any] ?? [:]
                             let fnName = fn["name"] as? String ?? ""
@@ -586,9 +668,11 @@ final class ClaudeService {
                             currentMsgs.append(toolMsg)
                             conversationMessages.append(toolMsg)
                         }
+                        state.chatActivityStatus = String(localized: "Thinking…")
                         continue
                     }
 
+                    guard !Task.isCancelled else { return }
                     let content = (message["content"] as? String) ?? ""
                     var finalDisplay = content.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !executedActionSummaries.isEmpty {
@@ -602,9 +686,13 @@ final class ClaudeService {
                     NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
                     break
                 }
+            } catch is CancellationError {
+                return
             } catch {
-                conversationMessages.removeLast()
-                await showError(error.localizedDescription, state: state)
+                if !Task.isCancelled {
+                    conversationMessages.removeLast()
+                    await showError(error.localizedDescription, state: state)
+                }
             }
         }
     }

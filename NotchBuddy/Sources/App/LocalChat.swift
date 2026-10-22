@@ -186,6 +186,7 @@ enum LocalChat {
         let minInterval: TimeInterval = 1.0 / 15.0
         do {
             for try await line in bytes.lines {
+                guard !Task.isCancelled else { break }
                 guard let delta = parseSSEDelta(line) else { continue }
                 accumulated += delta
                 let now = Date()
@@ -195,8 +196,12 @@ enum LocalChat {
                     await MainActor.run { onToken(visible) }
                 }
             }
+        } catch is CancellationError {
+            // User cancelled via stop button
         } catch {
-            throw LocalChatError.serverUnreachable(baseURL)
+            if !Task.isCancelled {
+                throw LocalChatError.serverUnreachable(baseURL)
+            }
         }
         // Always send the final filtered state
         let visible = progressiveFilter(accumulated)

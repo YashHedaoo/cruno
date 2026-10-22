@@ -1209,9 +1209,26 @@ struct PromptView: View {
                                 ForEach(state.chatHistory) { msg in
                                     ChatBubble(message: msg).id(msg.id)
                                 }
-                                if state.stateOverride != nil {
-                                    HStack { TypingDotsView(); Spacer(minLength: 32) }
-                                        .id("typing")
+                                if state.stateOverride != nil || state.isChatGenerating {
+                                    HStack(spacing: 8) {
+                                        if let status = state.chatActivityStatus, !status.isEmpty {
+                                            HStack(spacing: 5) {
+                                                ChatActivityIndicatorIcon(status: status)
+                                                Text(status)
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundColor(Color(hex: "#9DA3AE"))
+                                            }
+                                            .padding(.horizontal, 9)
+                                            .padding(.vertical, 4)
+                                            .background(Color.white.opacity(0.08))
+                                            .clipShape(Capsule())
+                                            .transition(.scale(scale: 0.92).combined(with: .opacity))
+                                        }
+                                        TypingDotsView()
+                                        Spacer(minLength: 32)
+                                    }
+                                    .id("typing")
+                                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: state.chatActivityStatus)
                                 }
                             }
                             .padding(.vertical, 2)
@@ -1226,6 +1243,11 @@ struct PromptView: View {
                                 withAnimation { proxy.scrollTo("typing", anchor: .bottom) }
                             } else if let last = state.chatHistory.last(where: { !$0.content.isEmpty }) {
                                 withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            }
+                        }
+                        .onChange(of: state.isChatGenerating) { _, generating in
+                            if generating {
+                                withAnimation { proxy.scrollTo("typing", anchor: .bottom) }
                             }
                         }
                         .onAppear {
@@ -1275,19 +1297,50 @@ struct PromptView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .focused($focused)
-                        .onSubmit { sendMessage() }
+                        .onSubmit {
+                            if state.isChatGenerating {
+                                stopMessage()
+                            } else {
+                                sendMessage()
+                            }
+                        }
 
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: "#0B0C0E"))
+                    if state.isChatGenerating {
+                        Button(action: stopMessage) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(hex: "#F5F6F8"))
+                                    .frame(width: 28, height: 28)
+
+                                Circle()
+                                    .stroke(Color(hex: state.chatProvider.accentHex).opacity(0.4), lineWidth: 1.5)
+                                    .frame(width: 28, height: 28)
+
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color(hex: "#0B0C0E"))
+                                    .frame(width: 10, height: 10)
+                            }
+                        }
+                        .buttonStyle(PlainPressableButtonStyle())
+                        .help(String(localized: "Stop generating"))
+                        .transition(.scale.combined(with: .opacity))
+                    } else {
+                        let canSend = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(canSend ? Color(hex: "#0B0C0E") : Color(hex: "#5C6370"))
+                        }
+                        .buttonStyle(SendButtonStyle(enabled: canSend))
+                        .disabled(!canSend)
+                        .help(String(localized: "Send"))
+                        .transition(.scale.combined(with: .opacity))
                     }
-                    .buttonStyle(SendButtonStyle())
-                    .disabled(text.isEmpty)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(Color.white.opacity(0.07))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .animation(.spring(response: 0.25, dampingFraction: 0.8), value: state.isChatGenerating)
                 .simultaneousGesture(TapGesture().onEnded { focused = true })
             }
             .padding(.leading, 84)
@@ -1309,7 +1362,11 @@ struct PromptView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .islandSendMessage)) { _ in
             guard state.view == .prompt else { return }
-            sendMessage()
+            if state.isChatGenerating {
+                stopMessage()
+            } else {
+                sendMessage()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .islandNewConversation)) { _ in
             guard state.view == .prompt else { return }
@@ -1326,11 +1383,12 @@ struct PromptView: View {
         text = ""
         focused = false
         state.chatHistory.append(ChatMessage(role: .user, content: query))
-        state.stateOverride = .thinking
-        Task {
-            await ClaudeService.shared.chat(query: query, context: state.promptContext, state: state)
-            await MainActor.run { focused = true }
-        }
+        ClaudeService.shared.startChat(query: query, context: state.promptContext, state: state)
+    }
+
+    private func stopMessage() {
+        ClaudeService.shared.stopChat(state: state)
+        focused = true
     }
 }
 
@@ -1538,6 +1596,35 @@ struct TypingDotsView: View {
         }
         .padding(.horizontal, 2).padding(.vertical, 4)
         .onAppear { phase = true }
+    }
+}
+
+struct ChatActivityIndicatorIcon: View {
+    let status: String
+
+    var body: some View {
+        let lower = status.lowercased()
+        if lower.contains("search") || lower.contains("web") {
+            Image(systemName: "globe.americas.fill")
+                .font(.system(size: 10.5))
+                .foregroundColor(Color(hex: "#60A5FA"))
+        } else if lower.contains("screen") || lower.contains("view") {
+            Image(systemName: "camera.viewfinder")
+                .font(.system(size: 10.5))
+                .foregroundColor(Color(hex: "#F472B6"))
+        } else if lower.contains("browser") || lower.contains("chrome") || lower.contains("tab") {
+            Image(systemName: "safari.fill")
+                .font(.system(size: 10.5))
+                .foregroundColor(Color(hex: "#38BDF8"))
+        } else if lower.contains("system") || lower.contains("app") || lower.contains("control") {
+            Image(systemName: "macwindow")
+                .font(.system(size: 10.5))
+                .foregroundColor(Color(hex: "#A78BFA"))
+        } else {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10.5))
+                .foregroundColor(Color(hex: "#FBBF24"))
+        }
     }
 }
 
@@ -4816,12 +4903,23 @@ struct IconButtonStyle: ButtonStyle {
 }
 
 struct SendButtonStyle: ButtonStyle {
+    var enabled: Bool = true
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(width: 28, height: 28)
-            .background(Color(hex: "#F5F6F8"))
+            .background(enabled ? Color(hex: "#F5F6F8") : Color.white.opacity(0.08))
             .clipShape(Circle())
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .scaleEffect(configuration.isPressed && enabled ? 0.94 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+struct PlainPressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

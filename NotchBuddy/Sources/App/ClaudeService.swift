@@ -518,18 +518,36 @@ final class ClaudeService {
         msgs.append(["role": "user", "content": userText])
         conversationMessages.append(["role": "user", "content": userText])
 
-        let useStream = provider.isLocal
+        let isReasoningModel = state.activeChatModel.lowercased().contains("r1") ||
+                               state.activeChatModel.lowercased().contains("reasoning") ||
+                               state.activeChatModel.lowercased().contains("o1") ||
+                               state.activeChatModel.lowercased().contains("o3")
+
+        let lower = userText.lowercased()
+        let isActionQuery = lower.hasPrefix("open ") || lower.hasPrefix("launch ") ||
+                            lower.contains("click ") || lower.contains("type ") ||
+                            lower.contains("press ") || lower.contains("hotkey") ||
+                            lower.contains("take a screenshot") || lower.contains("capture screen") ||
+                            lower.contains("see my screen") || lower.contains("browser tab") ||
+                            lower.contains("chrome tab") || lower.contains("mute") ||
+                            lower.contains("set volume") || lower.contains("finder")
+
+        // Pure reasoning models (DeepSeek R1) and all standard conversational queries use fast SSE streaming.
+        // Action-oriented queries on non-reasoning models use the tool-calling loop.
+        let useTools = !provider.isLocal && !isReasoningModel && isActionQuery
+        let useStream = !useTools
+
         var body: [String: Any] = [
             "model": state.activeChatModel,
             "max_tokens": 4096,
             "messages": msgs,
         ]
-        if !provider.isLocal {
+        if useTools {
             body["tools"] = SystemAutomationEngine.openAIToolDefinitions
         }
         if useStream { body["stream"] = true }
 
-        var req = URLRequest(url: url, timeoutInterval: useStream ? 120 : 45)
+        var req = URLRequest(url: url, timeoutInterval: 120)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(authHeader, forHTTPHeaderField: "Authorization")
@@ -553,24 +571,44 @@ final class ClaudeService {
                 "max_tokens": 4096,
             ]
             let encodedBody = (try? JSONSerialization.data(withJSONObject: streamBody)) ?? Data()
+
+            var streamHeaders = ["Authorization": authHeader]
+            if provider == .opencode {
+                streamHeaders["HTTP-Referer"] = "https://cruno.app"
+                streamHeaders["X-Title"] = "Cruno"
+            }
+
             do {
                 let final = try await LocalChat.streamChat(
-                    baseURL: baseURL,
+                    endpointURL: url,
+                    headers: streamHeaders,
                     encodedBody: encodedBody,
-                    model: modelCopy
+                    model: modelCopy,
+                    onThinking: { [state] isThinking in
+                        if isThinking {
+                            state.chatActivityStatus = String(localized: "Thinking & reasoning…")
+                        } else if state.chatActivityStatus == String(localized: "Thinking & reasoning…") {
+                            state.chatActivityStatus = nil
+                        }
+                    }
                 ) { [state, msgId] visible in
-                    if !visible.isEmpty, state.stateOverride == .thinking {
-                        state.stateOverride = nil   // hide typing dots on first visible text
+                    if !visible.isEmpty {
+                        if state.stateOverride == .thinking {
+                            state.stateOverride = nil   // hide typing dots on first visible text
+                        }
+                        state.chatActivityStatus = nil
                     }
                     if let idx = state.chatHistory.firstIndex(where: { $0.id == msgId }) {
                         state.chatHistory[idx].content = visible
                     }
                 }
+                guard !Task.isCancelled else { return }
                 conversationMessages.append(["role": "assistant", "content": final])
                 if let idx = state.chatHistory.firstIndex(where: { $0.id == msgId }) {
                     state.chatHistory[idx].content = final
                 }
                 state.stateOverride = nil
+                state.chatActivityStatus = nil
                 state.view = .prompt
                 NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)
             } catch is CancellationError {
@@ -580,12 +618,13 @@ final class ClaudeService {
                     conversationMessages.removeLast()
                     state.chatHistory.removeAll { $0.id == msgId }
                     state.stateOverride = nil
+                    state.chatActivityStatus = nil
                     let msg: String
                     switch e {
                     case .serverUnreachable:
-                        msg = provider == .ollama
-                            ? "Ollama isn't running. Open it, then ask again."
-                            : "Start the local server in LM Studio, then ask again."
+                        msg = provider.isLocal
+                            ? (provider == .ollama ? "Ollama isn't running. Open it, then ask again." : "Start the local server in LM Studio, then ask again.")
+                            : "Cannot reach \(provider.displayName). Check your API key or network connection."
                     case .modelNotFound(let m):
                         msg = "\(m) isn't installed. Pick another model above the chat box."
                     case .serverError(let s):
@@ -598,6 +637,7 @@ final class ClaudeService {
                     conversationMessages.removeLast()
                     state.chatHistory.removeAll { $0.id == msgId }
                     state.stateOverride = nil
+                    state.chatActivityStatus = nil
                     await showError(error.localizedDescription, state: state)
                 }
             }

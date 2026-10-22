@@ -149,19 +149,40 @@ enum LocalChat {
         guard let url = URL(string: "\(baseURL)/v1/chat/completions") else {
             throw LocalChatError.serverUnreachable(baseURL)
         }
+        return try await streamChat(
+            endpointURL: url,
+            headers: ["Authorization": "Bearer ollama"],
+            encodedBody: encodedBody,
+            model: model,
+            onThinking: nil,
+            onToken: onToken
+        )
+    }
 
-        var req = URLRequest(url: url, timeoutInterval: 300)
+    static func streamChat(
+        endpointURL: URL,
+        headers: [String: String],
+        encodedBody: Data,
+        model: String,
+        onThinking: (@MainActor (Bool) -> Void)? = nil,
+        onToken: @MainActor @escaping (String) -> Void
+    ) async throws -> String {
+        var req = URLRequest(url: endpointURL, timeoutInterval: 180)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer ollama", forHTTPHeaderField: "Authorization")
+        for (k, v) in headers {
+            req.setValue(v, forHTTPHeaderField: k)
+        }
         req.httpBody = encodedBody
 
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {
             (bytes, response) = try await URLSession.shared.bytes(for: req)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            throw LocalChatError.serverUnreachable(baseURL)
+            throw LocalChatError.serverUnreachable(endpointURL.host ?? "server")
         }
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -172,7 +193,12 @@ enum LocalChat {
 
         if status != 200 {
             var raw = ""
-            do { for try await byte in bytes { raw.append(Character(UnicodeScalar(byte))); if raw.count > 4096 { break } } } catch {}
+            do {
+                for try await byte in bytes {
+                    raw.append(Character(UnicodeScalar(byte)))
+                    if raw.count > 4096 { break }
+                }
+            } catch {}
             if let data = raw.data(using: .utf8),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let msg = ((json["error"] as? [String: Any])?["message"] as? String) {
@@ -183,7 +209,7 @@ enum LocalChat {
 
         var accumulated = ""
         var lastUpdate = Date.distantPast
-        let minInterval: TimeInterval = 1.0 / 15.0
+        let minInterval: TimeInterval = 1.0 / 20.0
         do {
             for try await line in bytes.lines {
                 guard !Task.isCancelled else { break }
@@ -192,6 +218,8 @@ enum LocalChat {
                 let now = Date()
                 if now.timeIntervalSince(lastUpdate) >= minInterval {
                     lastUpdate = now
+                    let isThinking = accumulated.contains("<think>") && !accumulated.contains("</think>")
+                    await MainActor.run { onThinking?(isThinking) }
                     let visible = progressiveFilter(accumulated)
                     await MainActor.run { onToken(visible) }
                 }
@@ -200,14 +228,16 @@ enum LocalChat {
             // User cancelled via stop button
         } catch {
             if !Task.isCancelled {
-                throw LocalChatError.serverUnreachable(baseURL)
+                throw LocalChatError.serverUnreachable(endpointURL.host ?? "server")
             }
         }
         // Always send the final filtered state
-        let visible = progressiveFilter(accumulated)
-        await MainActor.run { onToken(visible) }
+        let visible = filterThinkingBlocks(accumulated).trimmingCharacters(in: .whitespacesAndNewlines)
+        await MainActor.run {
+            onThinking?(false)
+            onToken(visible)
+        }
 
-        return filterThinkingBlocks(accumulated)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return visible
     }
 }
